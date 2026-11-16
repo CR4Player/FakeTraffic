@@ -116,7 +116,11 @@ jobs:
               for f in po2lmo.c lib/lmo.c lib/lmo.h lib/plural_formula.y; do
                 curl -fsSL --retry 3 -o "$src/$f" "$base/$f"
               done
-              (cd "$src/lib" && lemon -d plural_formula.y)
+              (
+                cd "$src/lib"
+                lemon plural_formula.y || lemon -d. plural_formula.y
+                ls -l plural_formula.c plural_formula.h
+              )
               cc -O2 -o "$src/po2lmo" "$src/po2lmo.c" "$src/lib/lmo.c" "$src/lib/plural_formula.c" \
                 -I "$src" -I "$src/lib"
               install -m 0755 "$src/po2lmo" "$po2lmo"
