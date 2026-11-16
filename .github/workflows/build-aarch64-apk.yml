@@ -1,0 +1,178 @@
+name: Build aarch64 APK
+
+# Builds the faketraffic + luci-app-faketraffic APKs for the ImmortalWrt 25.12.1
+# rockchip/armv8 target (arch package "aarch64_generic"), e.g. Lunzn FastRhino R68S.
+#
+# The upstream release only ships a x86_64 build; this workflow cross-compiles with
+# the official ImmortalWrt 25.12.1 SDK and repacks the result with the SDK's apk tool.
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: "apk architecture field (must match the device's arch_packages)"
+        required: true
+        default: aarch64_generic
+      sdk_url:
+        description: "ImmortalWrt/OpenWrt 25.12 SDK tarball (.tar.zst)"
+        required: false
+        default: "https://downloads.immortalwrt.org/releases/25.12.1/targets/rockchip/armv8/immortalwrt-sdk-25.12.1-rockchip-armv8_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+      sdk_sha256:
+        description: "SHA256 of the SDK tarball"
+        required: false
+        default: "5aa940fd577efbc87bccdcedd4ccd0154b14815cde41248c003d1f0e1bea31a5"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-aarch64-apk.yml"
+      - ".github/scripts/**"
+      - "components/**"
+      - "openwrt/**"
+      - "tools/**"
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: aarch64_generic APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      SDK_URL: ${{ inputs.sdk_url || 'https://downloads.immortalwrt.org/releases/25.12.1/targets/rockchip/armv8/immortalwrt-sdk-25.12.1-rockchip-armv8_gcc-14.3.0_musl.Linux-x86_64.tar.zst' }}
+      SDK_SHA256: ${{ inputs.sdk_sha256 || '5aa940fd577efbc87bccdcedd4ccd0154b14815cde41248c003d1f0e1bea31a5' }}
+      APK_ARCH: ${{ inputs.arch || 'aarch64_generic' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential autoconf automake libtool \
+            pkg-config gettext zstd curl ca-certificates
+          node --version
+          msgcat --version | head -n 1
+
+      - name: Cache SDK tarball
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: sdk.tar.zst
+          key: sdk-${{ env.SDK_SHA256 }}
+
+      - name: Download SDK
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 \
+            -o sdk.tar.zst "$SDK_URL"
+          echo "$SDK_SHA256  sdk.tar.zst" | sha256sum -c -
+
+      - name: Extract SDK
+        run: |
+          tar --zstd -xf sdk.tar.zst
+          SDK_DIR=$(ls -d "$PWD"/immortalwrt-sdk-* | head -n 1)
+          [ -d "$SDK_DIR/staging_dir" ] || { echo "::error::SDK layout unexpected"; ls -la; exit 1; }
+          echo "SDK_DIR=$SDK_DIR" >> "$GITHUB_ENV"
+          ls "$SDK_DIR/staging_dir"
+
+      - name: Prepare SDK
+        run: |
+          set -eu
+          STAGING="$SDK_DIR/staging_dir"
+
+          # tools/build-unified-apk.sh looks the toolchain up with `find -type f`;
+          # turn versioned symlinks into plain wrappers so the search succeeds.
+          for suffix in gcc strip; do
+            bin=$(find "$STAGING" -maxdepth 3 -name "*-openwrt-linux-musl-$suffix" | head -n 1 || true)
+            [ -n "${bin:-}" ] || { echo "::error::no *-openwrt-linux-musl-$suffix in SDK"; exit 1; }
+            if [ -L "$bin" ]; then
+              real=$(readlink -f "$bin")
+              printf '#!/bin/sh\nexec "%s" "$@"\n' "$real" > "$bin.new"
+              chmod +x "$bin.new"
+              mv "$bin.new" "$bin"
+              echo "unlinked $bin -> $real"
+            fi
+          done
+
+          # luci-app-faketraffic's i18n goes through the SDK's po2lmo host tool.
+          po2lmo="$STAGING/hostpkg/bin/po2lmo"
+          if [ ! -x "$po2lmo" ]; then
+            alt=$(find "$STAGING" -maxdepth 3 -name po2lmo | head -n 1 || true)
+            [ -n "${alt:-}" ] || { echo "::error::po2lmo not found in SDK"; exit 1; }
+            mkdir -p "$(dirname "$po2lmo")"
+            cp -f "$alt" "$po2lmo"
+            chmod +x "$po2lmo"
+            echo "staged po2lmo from $alt"
+          fi
+          ls -l "$STAGING/host/bin/apk" "$po2lmo"
+
+      - name: Cross-build libmnl / libnfnetlink / libnetfilter_queue
+        run: sh .github/scripts/build-netfilter-libs.sh "$SDK_DIR"
+
+      - name: Build APKs
+        run: |
+          sudo env "PATH=$PATH" ARCH="$APK_ARCH" \
+            sh "$GITHUB_WORKSPACE/tools/build-unified-apk.sh" "$SDK_DIR" "$GITHUB_WORKSPACE/dist" all
+          ls -l dist
+          cat dist/SHA256SUMS
+
+      - name: Inspect packages
+        run: |
+          export PATH="$SDK_DIR/staging_dir/host/bin:$PATH"
+          for pkg in dist/*.apk; do
+            echo "===== $pkg"
+            ls -l "$pkg"
+            apk adbdump "$pkg" | sed -n '1,40p'
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: faketraffic-${{ env.APK_ARCH }}
+          path: |
+            dist/*.apk
+            dist/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          TAG="v0.4.0-r4-$APK_ARCH"
+          cat > release-notes.md <<NOTES
+          Unofficial build of FakeTraffic 0.4.0-r4 for ImmortalWrt 25.12.1 rockchip/armv8
+          (\`$APK_ARCH\`), e.g. Lunzn FastRhino R68S.
+
+          Built from \`alzpqm/FakeTraffic\` @ \`52c9967\` with the official ImmortalWrt
+          25.12.1 SDK (gcc-14.3.0, musl).
+
+          ## Install (on the router)
+
+          \`\`\`sh
+          cd /tmp
+          base=https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG
+          wget -O faketraffic-0.4.0-r4.apk \$base/faketraffic-0.4.0-r4.apk
+          wget -O luci-app-faketraffic-0.4.0-r4.apk \$base/luci-app-faketraffic-0.4.0-r4.apk
+          wget -O SHA256SUMS \$base/SHA256SUMS
+          sha256sum -c SHA256SUMS --ignore-missing
+          apk add --allow-untrusted ./faketraffic-0.4.0-r4.apk ./luci-app-faketraffic-0.4.0-r4.apk
+          \`\`\`
+
+          The packages are unsigned (\`--allow-untrusted\`), and both must be installed in a
+          single \`apk add\` transaction because \`luci-app-faketraffic\` pins \`faketraffic\`
+          to exactly 0.4.0-r4. Configuration: \`/etc/config/faketraffic\`; LuCI entry:
+          Services -> FakeTraffic. Only the NFQUEUE backend is included (no
+          \`faketraffic-ebpf\`).
+          NOTES
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "FakeTraffic 0.4.0-r4 ($APK_ARCH)" \
+              --notes-file release-notes.md
+          else
+            gh release edit "$TAG" --notes-file release-notes.md
+          fi
+          gh release upload "$TAG" dist/*.apk dist/SHA256SUMS --clobber
+          gh release view "$TAG" --json assets --jq '.assets[].name'
