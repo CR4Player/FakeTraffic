@@ -53,7 +53,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential autoconf automake libtool \
-            pkg-config gettext zstd curl ca-certificates
+            pkg-config gettext zstd curl ca-certificates lemon
           node --version
           msgcat --version | head -n 1
 
@@ -99,8 +99,8 @@ jobs:
           done
 
           # luci-app-faketraffic's i18n goes through the SDK's po2lmo host tool.
-          # The 25.12.1 SDK does not ship it, so fall back to building the tool
-          # from the pinned luci feed sources (it is a single self-contained file).
+          # The 25.12.1 SDK does not ship it, so build it from the pinned luci feed
+          # sources (po2lmo.c + lib/lmo.c + the lemon grammar it depends on).
           po2lmo="$STAGING/hostpkg/bin/po2lmo"
           if [ ! -x "$po2lmo" ]; then
             alt=$(find "$STAGING" -maxdepth 3 -name po2lmo | head -n 1 || true)
@@ -113,9 +113,12 @@ jobs:
               src=$(mktemp -d)
               base="https://raw.githubusercontent.com/immortalwrt/luci/$LUCI_PO2LMO_REV/modules/luci-base/src"
               mkdir -p "$src/lib"
-              curl -fsSL --retry 3 -o "$src/po2lmo.c" "$base/po2lmo.c"
-              curl -fsSL --retry 3 -o "$src/lib/lmo.h" "$base/lib/lmo.h"
-              cc -O2 -Wall -o "$src/po2lmo" "$src/po2lmo.c" -I "$src"
+              for f in po2lmo.c lib/lmo.c lib/lmo.h lib/plural_formula.y; do
+                curl -fsSL --retry 3 -o "$src/$f" "$base/$f"
+              done
+              (cd "$src/lib" && lemon -d plural_formula.y)
+              cc -O2 -o "$src/po2lmo" "$src/po2lmo.c" "$src/lib/lmo.c" "$src/lib/plural_formula.c" \
+                -I "$src" -I "$src/lib"
               install -m 0755 "$src/po2lmo" "$po2lmo"
               echo "built po2lmo from luci@$LUCI_PO2LMO_REV"
             fi
