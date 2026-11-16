@@ -42,6 +42,8 @@ jobs:
       SDK_URL: ${{ inputs.sdk_url || 'https://downloads.immortalwrt.org/releases/25.12.1/targets/rockchip/armv8/immortalwrt-sdk-25.12.1-rockchip-armv8_gcc-14.3.0_musl.Linux-x86_64.tar.zst' }}
       SDK_SHA256: ${{ inputs.sdk_sha256 || '5aa940fd577efbc87bccdcedd4ccd0154b14815cde41248c003d1f0e1bea31a5' }}
       APK_ARCH: ${{ inputs.arch || 'aarch64_generic' }}
+      # luci feed revision pinning the po2lmo sources used when the SDK ships none.
+      LUCI_PO2LMO_REV: ad75cde88e694b511100576bfbe0a280e5efe6ef
 
     steps:
       - name: Check out repository
@@ -97,15 +99,28 @@ jobs:
           done
 
           # luci-app-faketraffic's i18n goes through the SDK's po2lmo host tool.
+          # The 25.12.1 SDK does not ship it, so fall back to building the tool
+          # from the pinned luci feed sources (it is a single self-contained file).
           po2lmo="$STAGING/hostpkg/bin/po2lmo"
           if [ ! -x "$po2lmo" ]; then
             alt=$(find "$STAGING" -maxdepth 3 -name po2lmo | head -n 1 || true)
-            [ -n "${alt:-}" ] || { echo "::error::po2lmo not found in SDK"; exit 1; }
             mkdir -p "$(dirname "$po2lmo")"
-            cp -f "$alt" "$po2lmo"
-            chmod +x "$po2lmo"
-            echo "staged po2lmo from $alt"
+            if [ -n "${alt:-}" ]; then
+              cp -f "$alt" "$po2lmo"
+              chmod +x "$po2lmo"
+              echo "staged po2lmo from $alt"
+            else
+              src=$(mktemp -d)
+              base="https://raw.githubusercontent.com/immortalwrt/luci/$LUCI_PO2LMO_REV/modules/luci-base/src"
+              mkdir -p "$src/lib"
+              curl -fsSL --retry 3 -o "$src/po2lmo.c" "$base/po2lmo.c"
+              curl -fsSL --retry 3 -o "$src/lib/lmo.h" "$base/lib/lmo.h"
+              cc -O2 -Wall -o "$src/po2lmo" "$src/po2lmo.c" -I "$src"
+              install -m 0755 "$src/po2lmo" "$po2lmo"
+              echo "built po2lmo from luci@$LUCI_PO2LMO_REV"
+            fi
           fi
+          "$po2lmo" 2>&1 | head -n 1 || true
           ls -l "$STAGING/host/bin/apk" "$po2lmo"
 
       - name: Cross-build libmnl / libnfnetlink / libnetfilter_queue
