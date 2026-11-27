@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "description": "Single Source of Truth (SSOT) parameter bounds, defaults, and packet marking contracts shared across LuCI, OpenWrt runtime scripts, and packet engines.",
+  "ttl": {
+    "min": 1,
+    "max": 255,
+    "default": 3
+  },
+  "minHops": {
+    "min": 0,
+    "max": 254,
+    "default": 0,
+    "description": "0 preserves backwards-compatible behavior where the hop-skip gate equals ttl"
+  },
+  "repeat": {
+    "nfqueue": {
+      "min": 1,
+      "max": 10,
+      "tcpDefault": 2,
+      "udpDefault": 1
+    },
+    "ebpf": {
+      "min": 1,
+      "max": 8,
+      "default": 2
+    }
+  },
+  "dynamicPct": {
+    "min": 0,
+    "max": 99,
+    "default": 0
+  },
+  "queue": {
+    "tcpMin": 0,
+    "udpMin": 1,
+    "max": 65535,
+    "tcpDefault": 512,
+    "udpDefault": 513
+  },
+  "templates": {
+    "ebpfMin": 1,
+    "ebpfMax": 16,
+    "payloadMinBytes": 1,
+    "payloadMaxBytes": 1200,
+    "hostnameMaxBytes": 253,
+    "sipUriMaxBytes": 120
+  },
+  "interfaces": {
+    "ebpfMaxCount": 8,
+    "nameMaxBytes": 15
+  },
+  "packetContract": {
+    "defaultFwmarkHex": "0x10000",
+    "defaultFwmarkDec": 65536,
+    "defaultFwmaskHex": "0x10000",
+    "defaultFwmaskDec": 65536,
+    "fakeSipIpv4Id": "0x4653",
+    "fakeSipIpv6FlowLabel": "0x46553"
+  }
+}

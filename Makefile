@@ -6,6 +6,7 @@ all:
 test: all test-telemetry test-ebpf-config
 	python3 tests/hop-estimate.py
 	node tools/verify-sources.mjs
+	node tools/sync-schema.mjs --check
 	$(MAKE) -C components/fakehttp test VERSION=99.3-r1
 	cd components/fakehttp && sh scripts/smoke-openwrt-package.sh
 	bash components/fakesip/tools/core-regression-test.sh
@@ -19,6 +20,7 @@ test: all test-telemetry test-ebpf-config
 
 test-unified: test-ebpf-config
 	node tools/verify-sources.mjs
+	node tools/sync-schema.mjs --check
 	node tools/sync-unified-adapters.mjs --check
 	node --test tests/*.test.mjs
 	sh tests/unified-init.sh

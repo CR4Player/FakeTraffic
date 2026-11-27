@@ -16,6 +16,7 @@ export STAGING_DIR="$SDK/staging_dir"
 [ "$(id -u)" = 0 ] || { echo 'Root required for root-owned APK entries' >&2; exit 1; }
 [ -x "$APK" ] && [ -x "$TARGET_CC" ] && [ -x "$TARGET_STRIP" ] && [ -x "$PO2LMO" ]
 node "$ROOT/tools/verify-sources.mjs"
+node "$ROOT/tools/sync-schema.mjs" --check
 node "$ROOT/tools/sync-unified-adapters.mjs" --check
 umask 022
 WORK=$(mktemp -d /var/tmp/faketraffic-unified.XXXXXX)

@@ -36,7 +36,7 @@ define Package/faketraffic/install
 	$(INSTALL_BIN) ./files/etc/init.d/faketraffic $(1)/etc/init.d/faketraffic
 	$(INSTALL_CONF) ./files/etc/config/faketraffic $(1)/etc/config/faketraffic
 	$(INSTALL_BIN) ./files/usr/libexec/faketraffic/lock-run ./files/usr/libexec/faketraffic/preflight ./files/usr/libexec/faketraffic/status $(1)/usr/libexec/faketraffic/
-	$(INSTALL_DATA) ./files/usr/libexec/faketraffic/preflight-core.sh ./files/usr/libexec/faketraffic/runtime-manager.sh $(1)/usr/libexec/faketraffic/
+	$(INSTALL_DATA) ./files/usr/libexec/faketraffic/contract.sh ./files/usr/libexec/faketraffic/preflight-core.sh ./files/usr/libexec/faketraffic/runtime-manager.sh $(1)/usr/libexec/faketraffic/
 	$(INSTALL_DIR) $(1)/usr/libexec/rpcd
 	$(INSTALL_BIN) ./files/usr/libexec/rpcd/faketraffic $(1)/usr/libexec/rpcd/faketraffic
 endef

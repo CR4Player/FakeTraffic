@@ -1,10 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Fixed-schema checks. No packet, module, route, firewall or configuration writes.
+if [ -r /usr/libexec/faketraffic/contract.sh ]; then
+    . /usr/libexec/faketraffic/contract.sh
+elif [ -n "${FT_CONTRACT_SH:-}" ] && [ -r "$FT_CONTRACT_SH" ]; then
+    . "$FT_CONTRACT_SH"
+fi
 ft_error() { case ",$ft_errors," in *"\"$1\""*) ;; *) ft_errors="${ft_errors:+$ft_errors,}\"$1\"";; esac; }
 ft_warning() { case ",$ft_warnings," in *"\"$1\""*) ;; *) ft_warnings="${ft_warnings:+$ft_warnings,}\"$1\"";; esac; }
 ft_uint() { case "$1" in ''|*[!0-9]*) return 1;; esac; [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
 ft_path() { case "$1" in /*) ;; *) return 1;; esac; case "$1" in *[!A-Za-z0-9_./:@%+=-]*) return 1;; esac; [ "${#1}" -le 1023 ]; }
-ft_device() { case "$1" in ''|*[!A-Za-z0-9_.-]*) return 1;; esac; [ "${#1}" -le 15 ]; }
+ft_device() { case "$1" in ''|*[!A-Za-z0-9_.-]*) return 1;; esac; [ "${#1}" -le "${FT_SCHEMA_IFNAME_MAX_BYTES:-15}" ]; }
 ft_add_device() {
     ft_device "$1" || { ft_error INVALID_DEVICE; return; }
     case " $ft_devices " in *" $1 "*) ;; *) ft_devices="${ft_devices:+$ft_devices }$1"; ft_device_count=$((ft_device_count + 1));; esac
@@ -20,7 +25,7 @@ ft_tcp_payload() {
     config_get_bool enabled "$1" enabled 1
     [ "$enabled" = 1 ] || return
     ft_tcp_payload_count=$((ft_tcp_payload_count + 1))
-    [ "$ft_tcp_payload_count" -le 16 ] || { ft_error TCP_TEMPLATE_LIMIT_EXCEEDED; return; }
+    [ "$ft_tcp_payload_count" -le "${FT_SCHEMA_EBPF_TEMPLATE_MAX:-16}" ] || { ft_error TCP_TEMPLATE_LIMIT_EXCEEDED; return; }
     config_get kind "$1" type http
     config_get value "$1" payload
     case "$kind" in
@@ -34,7 +39,7 @@ payload_file = \"$value\"
 ";;
         http|https)
             case "$value" in ''|*[!A-Za-z0-9.-]*) ft_error INVALID_HOSTNAME;; esac
-            [ "${#value}" -le 253 ] || ft_error INVALID_HOSTNAME
+            [ "${#value}" -le "${FT_SCHEMA_HOSTNAME_MAX_BYTES:-253}" ] || ft_error INVALID_HOSTNAME
             ft_tcp_kind=http; [ "$kind" != https ] || ft_tcp_kind=tls
             # Only the restricted alphabet above is interpolated into TOML.
             case "$value" in ''|*[!A-Za-z0-9.-]*) return;; esac
@@ -51,7 +56,7 @@ hostname = \"$value\"
 ft_udp_file() {
     ft_udp_files=$((ft_udp_files + 1))
     ft_udp_payload_count=$((ft_udp_payload_count + 1))
-    [ "$ft_udp_payload_count" -le 16 ] || { ft_error UDP_TEMPLATE_LIMIT_EXCEEDED; return; }
+    [ "$ft_udp_payload_count" -le "${FT_SCHEMA_EBPF_TEMPLATE_MAX:-16}" ] || { ft_error UDP_TEMPLATE_LIMIT_EXCEEDED; return; }
     ft_path "$1" || { ft_error INVALID_PAYLOAD_PATH; return; }
     ft_payload_file_check "$1"
     ft_udp_templates="$ft_udp_templates
@@ -63,10 +68,10 @@ payload_file = \"$1\"
 ft_udp_uri() {
     ft_udp_uris=$((ft_udp_uris + 1))
     ft_udp_payload_count=$((ft_udp_payload_count + 1))
-    [ "$ft_udp_payload_count" -le 16 ] || { ft_error UDP_TEMPLATE_LIMIT_EXCEEDED; return; }
+    [ "$ft_udp_payload_count" -le "${FT_SCHEMA_EBPF_TEMPLATE_MAX:-16}" ] || { ft_error UDP_TEMPLATE_LIMIT_EXCEEDED; return; }
     case "$1" in sip:?*) ;; *) ft_error INVALID_SIP_URI; return;; esac
     case "$1" in *[!A-Za-z0-9_./:@%+=?\;-]*) ft_error INVALID_SIP_URI; return;; esac
-    [ "${#1}" -le 120 ] || ft_error INVALID_SIP_URI
+    [ "${#1}" -le "${FT_SCHEMA_SIP_URI_MAX_BYTES:-120}" ] || ft_error INVALID_SIP_URI
     ft_udp_templates="$ft_udp_templates
 [[udp.templates]]
 payload = \"sip\"
@@ -79,7 +84,7 @@ ft_payload_file_check() {
     [ -f "$1" ] || { ft_error PAYLOAD_FILE_UNAVAILABLE; return; }
     local bytes
     bytes="$(wc -c < "$1" 2>/dev/null)" || { ft_error PAYLOAD_FILE_UNAVAILABLE; return; }
-    ft_uint "$bytes" 1 1200 || ft_error PAYLOAD_SIZE_UNSUPPORTED
+    ft_uint "$bytes" "${FT_SCHEMA_PAYLOAD_MIN_BYTES:-1}" "${FT_SCHEMA_PAYLOAD_MAX_BYTES:-1200}" || ft_error PAYLOAD_SIZE_UNSUPPORTED
 }
 ft_environment() {
     local version major minor device link_type command active_pid checkpoint=false
@@ -151,10 +156,10 @@ ft_preflight() {
         config_get_bool value main all_interfaces 0; [ "$value" = 0 ] || ft_error ALL_INTERFACES_UNSUPPORTED
         config_get_bool value main ipv4 1; [ "$value" = 1 ] || ft_error IP_FAMILY_SELECTION_UNSUPPORTED
         config_get_bool value main ipv6 1; [ "$value" = 1 ] || ft_error IP_FAMILY_SELECTION_UNSUPPORTED
-        config_get value main fwmark 0x10000
-        case "$value" in 0x10000|65536) ;; *) ft_error CUSTOM_MARK_POLICY_UNSUPPORTED;; esac
-        config_get value main fwmask 0x10000
-        case "$value" in 0x10000|65536) ;; *) ft_error CUSTOM_MARK_POLICY_UNSUPPORTED;; esac
+        config_get value main fwmark "${FT_SCHEMA_DEFAULT_FWMARK_HEX:-0x10000}"
+        case "$value" in "${FT_SCHEMA_DEFAULT_FWMARK_HEX:-0x10000}"|"${FT_SCHEMA_DEFAULT_FWMARK_DEC:-65536}") ;; *) ft_error CUSTOM_MARK_POLICY_UNSUPPORTED;; esac
+        config_get value main fwmask "${FT_SCHEMA_DEFAULT_FWMASK_HEX:-0x10000}"
+        case "$value" in "${FT_SCHEMA_DEFAULT_FWMASK_HEX:-0x10000}"|"${FT_SCHEMA_DEFAULT_FWMASK_DEC:-65536}") ;; *) ft_error CUSTOM_MARK_POLICY_UNSUPPORTED;; esac
         for mode in skip_firewall use_iptables; do config_get_bool value main "$mode" 0; [ "$value" = 0 ] || ft_error MANUAL_FIREWALL_UNSUPPORTED; done
         ft_devices= ft_device_count=0
         config_get mode main interface_mode network
@@ -193,23 +198,23 @@ ft_preflight() {
         ft_devices="$ft_tcp_devices"
     fi
     count=0; for value in $ft_devices; do count=$((count + 1)); done
-    [ "$count" -gt 0 ] && [ "$count" -le 8 ] || ft_error DEVICE_COUNT_UNSUPPORTED
+    [ "$count" -gt 0 ] && [ "$count" -le "${FT_SCHEMA_EBPF_MAX_DEVICES:-8}" ] || ft_error DEVICE_COUNT_UNSUPPORTED
     if [ "$tcp" = 1 ] && [ "$udp" = 1 ]; then
         [ "$tttl:$trepeat:$thop:$tpct" = "$uttl:$urepeat:$uhop:$upct" ] || ft_error DIFFERENT_PROTOCOL_INJECTION_SETTINGS
     fi
     ft_ttl="$tttl" ft_repeat="$trepeat" ft_nohop="$thop" ft_percent="$tpct"
     if [ "$tcp" != 1 ]; then ft_ttl="$uttl" ft_repeat="$urepeat" ft_nohop="$uhop" ft_percent="$upct"; fi
-    ft_uint "$ft_ttl" 1 255 || ft_error INVALID_TTL
-    ft_uint "$ft_repeat" 1 8 || ft_error REPEAT_RANGE_UNSUPPORTED
-    ft_uint "$ft_percent" 0 99 || ft_error INVALID_DYNAMIC_PERCENT
+    ft_uint "$ft_ttl" "${FT_SCHEMA_TTL_MIN:-1}" "${FT_SCHEMA_TTL_MAX:-255}" || ft_error INVALID_TTL
+    ft_uint "$ft_repeat" "${FT_SCHEMA_EBPF_REPEAT_MIN:-1}" "${FT_SCHEMA_EBPF_REPEAT_MAX:-8}" || ft_error REPEAT_RANGE_UNSUPPORTED
+    ft_uint "$ft_percent" "${FT_SCHEMA_DYNAMIC_PCT_MIN:-0}" "${FT_SCHEMA_DYNAMIC_PCT_MAX:-99}" || ft_error INVALID_DYNAMIC_PERCENT
     [ "$ft_nohop" = 0 ] || [ "$ft_percent" = 0 ] || ft_error INVALID_HOP_SETTINGS
     ft_tcp_enabled="$tcp" ft_udp_enabled="$udp"
     ft_environment
     ft_compatible=false; [ -n "$ft_errors" ] || ft_compatible=true
 }
 ft_preflight_json() {
-    printf '{"schema_version":1,"scope":"saved_config_and_read_only_environment","candidate":"ebpf","configured_backend":"%s","can_attempt":%s,"template_limit":16,"tcp_template_count":%s,"udp_template_count":%s,"load_attach":"not_tested","errors":[%s],"warnings":[%s]}\n' \
-        "$(case "$ft_backend" in nfqueue|ebpf) printf '%s' "$ft_backend";; *) printf unknown;; esac)" "$ft_compatible" "$ft_tcp_payload_count" "$ft_udp_payload_count" "$ft_errors" "$ft_warnings"
+    printf '{"schema_version":1,"scope":"saved_config_and_read_only_environment","candidate":"ebpf","configured_backend":"%s","can_attempt":%s,"template_limit":%s,"tcp_template_count":%s,"udp_template_count":%s,"load_attach":"not_tested","errors":[%s],"warnings":[%s]}\n' \
+        "$(case "$ft_backend" in nfqueue|ebpf) printf '%s' "$ft_backend";; *) printf unknown;; esac)" "$ft_compatible" "${FT_SCHEMA_EBPF_TEMPLATE_MAX:-16}" "$ft_tcp_payload_count" "$ft_udp_payload_count" "$ft_errors" "$ft_warnings"
 }
 ft_render() {
     [ "$ft_compatible" = true ] || return 1

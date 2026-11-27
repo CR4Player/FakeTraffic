@@ -10,6 +10,8 @@ import { verifySources } from '../tools/verify-sources.mjs';
 import { adapters } from '../tools/sync-unified-adapters.mjs';
 const diagnosticsSource = fs.readFileSync(new URL('../openwrt/luci-app-faketraffic/root/www/luci-static/resources/faketraffic/diagnostics.js', import.meta.url), 'utf8');
 const diagnostics = new Function('baseclass', '_', diagnosticsSource)({ extend: value => value }, text => text);
+const contractSource = fs.readFileSync(new URL('../openwrt/luci-app-faketraffic/root/www/luci-static/resources/faketraffic/contract.js', import.meta.url), 'utf8');
+const contract = new Function('baseclass', contractSource)({ extend: value => value });
 const root = fileURLToPath(new URL('..', import.meta.url));
 const frontend = path.join(root, 'openwrt/luci-app-faketraffic/root');
 const source = fs.readFileSync(path.join(frontend, 'www/luci-static/resources/view/faketraffic/config.js'), 'utf8');
@@ -38,14 +40,14 @@ function harness({ readonly = false, values = {}, fail = false, result = { code:
     parts[name] = new Function('baseclass', 'form', 'widgets', 'L', '_', src)(
       { extend: o => o }, form, { DeviceSelect: 'DeviceSelect', NetworkSelect: 'NetworkSelect' }, L, s => s);
   }
-  const view = new Function('view', 'form', 'rpc', 'fs', 'ui', 'poll', 'tcp', 'udp', 'diagnostics', 'L', 'E', '_', source)(
+  const view = new Function('view', 'form', 'rpc', 'fs', 'ui', 'poll', 'tcp', 'udp', 'diagnostics', 'contract', 'L', 'E', '_', source)(
     { extend: o => o }, form,
     { declare: definition => name => {
       if (definition.object === 'service') { calls.push(name); return fail ? Promise.reject(Error('denied')) : Promise.resolve({ faketraffic: { instances: { tcp: { running: true }, udp: { running: false } } } }); }
       return Promise.resolve(definition.method === 'preflight' ? preflight : {});
     } },
     { exec: async (...args) => { exec.push(args); return result; } },
-    { addNotification: (...args) => notices.push(args), hideTooltip() {} }, { add: fn => polls.push(fn) }, parts.tcp, parts.udp, diagnostics, L, element, s => s);
+    { addNotification: (...args) => notices.push(args), hideTooltip() {} }, { add: fn => polls.push(fn) }, parts.tcp, parts.udp, diagnostics, contract, L, element, s => s);
   return { view, maps, exec, polls, calls, notices };
 }
 test('one editable map includes complete TCP and UDP fields, with no legacy redirects', async () => {

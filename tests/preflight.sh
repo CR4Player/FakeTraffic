@@ -3,6 +3,7 @@
 # Anonymous stub-only inputs. No real UCI/network/engine execution.
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+FT_CONTRACT_SH="$ROOT/openwrt/faketraffic/files/usr/libexec/faketraffic/contract.sh"
 . "$ROOT/openwrt/faketraffic/files/usr/libexec/faketraffic/preflight-core.sh"
 config_get() {
     _target=$1 _key=$2.$3 _value=${4:-}
