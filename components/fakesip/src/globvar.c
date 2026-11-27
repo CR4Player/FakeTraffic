@@ -23,6 +23,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "pkt_contract.h"
+
 struct fs_context g_ctx = {.exit = 0,
                            .logfp = NULL,
 
@@ -37,11 +39,12 @@ struct fs_context g_ctx = {.exit = 0,
                            /* -g */ .nohopest = 0,
                            /* -i */ .iface = NULL,
                            /* -k */ .killproc = 0,
-                           /* -m */ .fwmark = 0x10000,
-                           /* -n */ .nfqnum = 513,
-                           /* -r */ .repeat = 2,
+                           /* -m */ .fwmark = FS_DEFAULT_FWMARK,
+                           /* -n */ .nfqnum = FS_DEFAULT_NFQNUM,
+                           /* -r */ .repeat = FS_DEFAULT_REPEAT,
                            /* -s */ .silent = 0,
-                           /* -t */ .ttl = 3,
+                           /* -t */ .ttl = FS_DEFAULT_TTL,
+                           /* -H */ .min_hops = FS_DEFAULT_MIN_HOPS,
                            /* -w */ .logpath = NULL,
                            /* -x */ .fwmask = 0,
                            /* -y */ .dynamic_pct = 0,

@@ -15,8 +15,8 @@
     },
     "fakehttp/src/rawsend.c": {
       "baseSHA256": "bbdecf57de45dba24d557df509fedf832165b0ea5e7b89f3d0e50bb1138673d1",
-      "sha256": "bd439f647f1a52b850d3750d88b54715ab6ddbcbfb9905f6b31947968d0f172f",
-      "reason": "GPL-3.0-or-later telemetry: local counters, atomic tmpfs export, and regression linkage"
+      "sha256": "7da931778177f93bcf6d55f97497cab2c731bd53a97460b165a718ecb5476878",
+      "reason": "GPL-3.0-or-later telemetry: local counters, atomic tmpfs export, and regression linkage; GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
     },
     "fakehttp/src/telemetry.c": {
       "baseSHA256": null,
@@ -35,8 +35,8 @@
     },
     "fakesip/src/rawsend.c": {
       "baseSHA256": "501e98dd3b4024d4dd40c175d50f53d82caa695aed2951bd52648de5e454e2e9",
-      "sha256": "5abc65c0cd9fb76471b529fe585a62b8ec8ecd0c85e8cbac59776b6d5a86a3c6",
-      "reason": "GPL-3.0-or-later telemetry and conventional initial TTL32 hop estimation matching the TCP engine"
+      "sha256": "5d159c2e6bef8fddf5842bf7308929a850afff5e3f19df9268c87d5df4f93b8e",
+      "reason": "GPL-3.0-or-later telemetry and conventional initial TTL32 hop estimation matching the TCP engine; GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
     },
     "fakesip/src/telemetry.c": {
       "baseSHA256": null,
@@ -117,6 +117,76 @@
       "baseSHA256": "bc46c9e4788a6f18fdee77656ed83abbddc7943a8f1f81bf8a6787f4f729bb99",
       "sha256": "9705b0c58bab9cca85b5519297cbc01366709cf3856a171cadfe0ffaf29260d0",
       "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage"
+    },
+    "fakehttp/include/pkt_contract.h": {
+      "baseSHA256": null,
+      "sha256": "f212d062a01a018c211170a3882cb0df0a68bc888ea15f7ed08c377f51b515e7",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakehttp/include/globvar.h": {
+      "baseSHA256": "e8827d1b6bfd1fce30ab7a36d70f25df8522b54d9dc6442996e775f1f91b04ba",
+      "sha256": "582b0204276753608a6a8eee5a50a1ce247aa1a8eda604f2b8db8ea9773a3173",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakehttp/src/globvar.c": {
+      "baseSHA256": "1172dfc9014d1d64ae8159bf3a90f1f9831d33fd5151b1a0fdf92455da090fa0",
+      "sha256": "add36f5c5a599614f574d16894044c93b7a324a24870104e00a9d9db6aa2da7f",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakehttp/src/mainfun.c": {
+      "baseSHA256": "40819f4a3ee9dbb329c5917f77d803d0e53a304fe28b91fe6568690ab6aeb413",
+      "sha256": "97a8d45c7b4c2f2e7508d284d9f8e51fae47a7a71568a450c84ebf94e71f9602",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakehttp/src/payload.c": {
+      "baseSHA256": "8bbbff582ad076742cfa894e356b5a9ccb4f87429d4e9d063c2759cc381bb6f9",
+      "sha256": "d2e24d58bdb0b64753cf2fc22982a941f500171e28ea151a9e664872f4bd9691",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakehttp/tests/test-core-validation.c": {
+      "baseSHA256": "adee3a3b20a10a04364441085cf4d8b7852272c1a5efa8656f03c86112d1035a",
+      "sha256": "6e48bb474204d2781f6e62dffde6ce297e04219eeb31b174d9274b00888d2a14",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakehttp/tests/test-rawsend-ttl.c": {
+      "baseSHA256": "97c8ead251befa84e1c8f130a3c8a22153b59b625a197865bd6c9ed39abbeefc",
+      "sha256": "816b9e843f9af2918997a75529c8a0d2542f060a8ad19e407e587575cc847e6f",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakesip/include/pkt_contract.h": {
+      "baseSHA256": null,
+      "sha256": "3e0160349af44bf797005f199ae12b07c77824145dfa6bb66688c957231320cb",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakesip/include/ipv4pkt.h": {
+      "baseSHA256": "81d1fb8452ad025218267883e61559ad8599c54b639835dbeed932c4b2d21588",
+      "sha256": "1e259781f4500e31744e9e8b004f6c961a5046887f642ce4c2b9e1245503f885",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakesip/include/ipv6pkt.h": {
+      "baseSHA256": "409e29b3d148ddf87df62c548e002a7b3c8bcf1d58e0e7a4370981941ba315e8",
+      "sha256": "241c4b34587eae24f92010c6e3c9aadc0e4ebbb7ce775862e911cd07a3eb4039",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakesip/include/globvar.h": {
+      "baseSHA256": "391e29652f14830340c4359a52236b7e8022d5d2b4cff8cda2fe7bf7aa2d9e2f",
+      "sha256": "cb982013884160c53370b2c42bcf7a07cf3c342f7e1d84f0fa9bbb1dc096e48c",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakesip/src/globvar.c": {
+      "baseSHA256": "4b572966a98691345d2fe9de646688e2d0836ef175f0e8ab5a5f2d3324aff2da",
+      "sha256": "c51615db1201bab1e4e900336a396d93c29d2dbf54512e5cb56de7df7b94c890",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakesip/src/mainfun.c": {
+      "baseSHA256": "3c6d368d541161379f158b9f460035914822a8ffa48dd71398c354441d4b4e9a",
+      "sha256": "c5f469685c79e3d0417c972c5ada6f46992bf30fe08c49b61cce48ef9febe382",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
+    },
+    "fakesip/tests/test_rawsend.c": {
+      "baseSHA256": "626713844981de19d4748fbb5f48ffd8af1321654d88fc01f53e2cb71d90daff",
+      "sha256": "0bff716551684d5bb989ea2fcd2c972aec6736ef10184354b4e381112cf37f21",
+      "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
     }
   }
 }

@@ -22,10 +22,14 @@ test('engine C headers and source bounds agree with schema/parameters.json SSOT'
   assert.match(abi, new RegExp(`#define FF_TEMPLATE_MAX ${s.templates.ebpfMax}\\b`));
   assert.match(abi, new RegExp(`#define FF_INTERFACES ${s.interfaces.ebpfMaxCount}\\b`));
 
-  const sipPkt4 = read('components/fakesip/include/ipv4pkt.h');
-  const sipPkt6 = read('components/fakesip/include/ipv6pkt.h');
-  assert.ok(sipPkt4.includes(s.packetContract.fakeSipIpv4Id), 'FakeSIP IPv4 ID mismatch');
-  assert.ok(sipPkt6.includes(s.packetContract.fakeSipIpv6FlowLabel), 'FakeSIP IPv6 flow label mismatch');
+  const httpContract = read('components/fakehttp/include/pkt_contract.h');
+  const sipContract = read('components/fakesip/include/pkt_contract.h');
+  assert.ok(sipContract.includes(s.packetContract.fakeSipIpv4Id), 'FakeSIP IPv4 ID mismatch');
+  assert.ok(sipContract.includes(s.packetContract.fakeSipIpv6FlowLabel), 'FakeSIP IPv6 flow label mismatch');
+  assert.match(httpContract, new RegExp(`#define FH_MAX_REPEAT\\s+${s.repeat.nfqueue.max}\\b`));
+  assert.match(sipContract, new RegExp(`#define FS_MAX_REPEAT\\s+${s.repeat.nfqueue.max}\\b`));
+  assert.match(httpContract, new RegExp(`#define FH_MAX_MIN_HOPS\\s+${s.minHops.max}\\b`));
+  assert.match(sipContract, new RegExp(`#define FS_MAX_MIN_HOPS\\s+${s.minHops.max}\\b`));
 
   const httpPayload = read('components/fakehttp/src/payload.c');
   const sipPayload = read('components/fakesip/src/payload.c');

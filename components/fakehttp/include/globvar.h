@@ -49,6 +49,7 @@ struct fh_context {
     /* -r */ int repeat;
     /* -s */ int silent;
     /* -t */ uint8_t ttl;
+    /* -H */ uint8_t min_hops;
     /* -w */ const char *logpath;
     /* -x */ uint32_t fwmask;
     /* -y */ int dynamic_pct;

@@ -88,6 +88,12 @@ static uint8_t calc_snd_ttl(int hops)
 }
 
 
+static int hop_gate_threshold(void)
+{
+    return g_ctx.min_hops ? (int) g_ctx.min_hops : (int) g_ctx.ttl;
+}
+
+
 static void ipaddr_to_str(struct sockaddr *addr, char ipstr[INET6_ADDRSTRLEN])
 {
     static const char invalid[] = "INVALID";
@@ -417,7 +423,7 @@ int fs_rawsend_handle(struct sockaddr_ll *sll, uint8_t *pkt_data, int pkt_len,
 
         if (!g_ctx.nohopest) {
             hop = hop_estimate(src_ttl);
-            if (hop <= g_ctx.ttl) {
+            if (hop <= hop_gate_threshold()) {
                 FT_COUNT(FT_SKIP_HOP);
                 E_INFO("%s:%u ===LOCAL(~)===> %s:%u", src_ip_str,
                        ntohs(udph->source), dst_ip_str, ntohs(udph->dest));
@@ -466,9 +472,9 @@ int fs_rawsend_handle(struct sockaddr_ll *sll, uint8_t *pkt_data, int pkt_len,
 
         snd_ttl = g_ctx.ttl;
 
-        if (!g_ctx.nohopest) {
+        if (!g_ctx.nohopest && !srcinfo_unavail && src_ttl > 0) {
             hop = hop_estimate(src_ttl);
-            if (hop <= g_ctx.ttl) {
+            if (hop <= hop_gate_threshold()) {
                 FT_COUNT(FT_SKIP_HOP);
                 E_INFO("%s:%u <===LOCAL(~)=== %s:%u", src_ip_str,
                        ntohs(udph->source), dst_ip_str, ntohs(udph->dest));

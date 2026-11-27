@@ -38,6 +38,7 @@
 #include "nfqueue.h"
 #include "nfrules.h"
 #include "payload.h"
+#include "pkt_contract.h"
 #include "process.h"
 #include "rawsend.h"
 #include "signals.h"
@@ -78,6 +79,8 @@ static void print_usage(const char *name)
         "Advanced Options:\n"
         "  -f                 skip firewall rules\n"
         "  -g                 disable hop count estimation\n"
+        "  -H <hops>          minimum estimated remote hops before injecting "
+        "(0=use TTL)\n"
         "  -m <mark>          fwmark for bypassing the queue\n"
         "  -n <number>        netfilter queue number (0-65535)\n"
         "  -p <port>          bypass destination TCP port (repeatable)\n"
@@ -159,7 +162,7 @@ int main(int argc, char *argv[])
 
     plinfo_cnt = iface_cnt = 0;
 
-    while ((opt = getopt(argc, argv, "0146ab:de:fgh:i:km:n:p:r:st:w:x:y:z")) !=
+    while ((opt = getopt(argc, argv, "0146H:ab:de:fgh:i:km:n:p:r:st:w:x:y:z")) !=
            -1) {
         switch (opt) {
             case '0':
@@ -225,6 +228,15 @@ int main(int argc, char *argv[])
 
             case 'g':
                 g_ctx.nohopest = 1;
+                break;
+
+            case 'H':
+                if (parse_ull_arg(optarg, 0, FH_MAX_MIN_HOPS, &tmp) < 0) {
+                    fprintf(stderr, "%s: invalid value for -H.\n", argv[0]);
+                    print_usage(argv[0]);
+                    goto free_mem;
+                }
+                g_ctx.min_hops = (uint8_t) tmp;
                 break;
 
             case 'i':

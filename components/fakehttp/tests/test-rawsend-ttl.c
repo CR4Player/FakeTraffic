@@ -18,6 +18,17 @@ int main(void)
             return EXIT_FAILURE;
         }
         g_ctx.ttl = 3;
+        g_ctx.min_hops = 0;
+        if (hop_gate_threshold() != 3) {
+            fprintf(stderr, "default hop gate did not inherit ttl\n");
+            return EXIT_FAILURE;
+        }
+        g_ctx.min_hops = 8;
+        if (hop_gate_threshold() != 8) {
+            fprintf(stderr, "explicit min_hops did not decouple hop gate from ttl\n");
+            return EXIT_FAILURE;
+        }
+        g_ctx.min_hops = 0;
         for (pct = 0; pct <= 50; pct += 25) {
             g_ctx.dynamic_pct = pct;
             if (hops > g_ctx.ttl && calc_snd_ttl(hops) >= hops) {
