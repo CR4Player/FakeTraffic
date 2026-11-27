@@ -50,8 +50,14 @@ reject() {
 reset; accept
 reset; ACK=0; reject EXPLICIT_SEMANTICS_ACCEPTANCE_REQUIRED
 reset; TCP_REPEAT=9 UDP_REPEAT=9; reject REPEAT_RANGE_UNSUPPORTED
-reset; TCP_REPEAT=2; reject DIFFERENT_PROTOCOL_INJECTION_SETTINGS
-reset; UDP_TTL=4; reject DIFFERENT_PROTOCOL_INJECTION_SETTINGS
+reset; TCP_REPEAT=2 UDP_REPEAT=1; accept
+rendered=$(ft_render)
+printf '%s' "$rendered" | grep -Fq 'repeat = 2'
+printf '%s' "$rendered" | grep -Fq 'repeat = 1'
+reset; TCP_TTL=3 UDP_TTL=4; accept
+rendered=$(ft_render)
+printf '%s' "$rendered" | grep -Fq 'ttl = 3'
+printf '%s' "$rendered" | grep -Fq 'ttl = 4'
 reset; PAYLOADS=2; accept; [ "$ft_tcp_payload_count" = 2 ]
 rendered=$(ft_render); [ "$(printf '%s' "$rendered" | grep -c '^\[\[tcp.templates\]\]')" = 2 ]
 reset; PAYLOADS=16; accept
@@ -60,7 +66,10 @@ reset; PAYLOADS=0; reject TCP_TEMPLATE_REQUIRED
 reset; MARK=65537; reject CUSTOM_MARK_POLICY_UNSUPPORTED
 reset; PORT=1; reject TCP_PORT_BYPASS_UNSUPPORTED
 reset; IPV6=0; reject IP_FAMILY_SELECTION_UNSUPPORTED
-reset; DEVICE=wan1; reject DIFFERENT_PROTOCOL_DEVICES
+reset; DEVICE=wan1; accept
+rendered=$(ft_render)
+printf '%s' "$rendered" | grep -Fq 'protocols = ["tcp"]'
+printf '%s' "$rendered" | grep -Fq 'protocols = ["udp"]'
 reset; ALL=1; reject ALL_INTERFACES_UNSUPPORTED
 reset; PROFILE=china_all; accept; [ "$ft_udp_payload_count" = 3 ]
 reset; PROFILE=china_sip_observed; accept; [ "$ft_udp_payload_count" = 2 ]

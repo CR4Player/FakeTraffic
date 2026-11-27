@@ -144,7 +144,8 @@ static int refresh(struct runtime *r,int initial) {
             changed=1;
         }
         struct ff_interface iface={.generation=r->generation[i],.slot=i,.mode=d->mode,
-            .mtu=mtu,.builder=d->mode==FF_L3?r->l3:r->l2};
+            .mtu=mtu,.builder=d->mode==FF_L3?r->l3:r->l2,
+            .proto_mask=d->proto_mask?d->proto_mask:FF_PROTO_BOTH};
         if(bpf_map_update_elem(map(r,"interfaces"),&idx,&iface,BPF_ANY))return -1;
     }
     /* Record newly attached target links before startup publishes/enables the

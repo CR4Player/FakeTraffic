@@ -27,6 +27,10 @@
 
 #include "pkt_contract.h"
 
+#ifndef FS_FAKE_IPV4_ID
+#error "pkt_contract.h must define FS_FAKE_IPV4_ID"
+#endif
+
 int fs_pkt4_parse(void *pkt_data, int pkt_len, struct sockaddr *saddr,
                   struct sockaddr *daddr, uint8_t *ttl,
                   struct udphdr **udph_ptr, int *udp_payload_len);

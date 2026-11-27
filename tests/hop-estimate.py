@@ -58,11 +58,10 @@ static int decision(unsigned remote,unsigned percent,unsigned base,unsigned *sel
             end = text.index('    if(!reserve', start)
             code = header + r'''
 typedef uint64_t __u64;typedef uint32_t __u32;
-struct config { unsigned ttl,estimate_hops,percent; };
 #define bpf_ktime_get_ns() 0
 #define stat(id) ((void)0)
 static int decision(unsigned remote_ttl,unsigned percent,unsigned base,unsigned *selected) {
-    struct config config={base,1,percent},*c=&config;
+    __u32 base_ttl=base,est=1,pct=percent,min_hops=0;
 ''' + text[start:end] + '\n(void)now;(void)z;*selected=ttl;return 1;\n}\n'
         cfile, binary = work / (engine + '.c'), work / engine
         cfile.write_text(code + loop, newline='\n')

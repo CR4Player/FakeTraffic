@@ -70,8 +70,8 @@
     },
     "fakeflow/ebpf/user/lifecycle.c": {
       "baseSHA256": "78a8c507c747adbaf6638262df87ce0cd296b91db84748cf264d9563833d6de0",
-      "sha256": "6e33ce1e53e44699680a4caa607af08497d6188b247127221446adfb323be660",
-      "reason": "Independent GPL-2.0-only backend: FD-owned TAP/TUN and TCX, bounded control I/O and uint64 metrics; persist newly attached WAN ownership before enabling lease, propagate checkpoint errors, and avoid quiet-refresh rewrites; GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage"
+      "sha256": "42355e258188b0b97092a7ef054f7bc770f0d9871d8a3cb534d5c5741e299267",
+      "reason": "Independent GPL-2.0-only backend: FD-owned TAP/TUN and TCX, bounded control I/O and uint64 metrics; persist newly attached WAN ownership before enabling lease, propagate checkpoint errors, and avoid quiet-refresh rewrites; GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage; GPL-2.0-only axiomatic decoupling: per-protocol TCP/UDP injection settings, min_hops gate, and per-interface protocol masks"
     },
     "fakeflow/Makefile": {
       "baseSHA256": "f37dc40ba938094b17257ded7e30b14c595dcaebbefdc530a976f92579d518d0",
@@ -80,8 +80,8 @@
     },
     "fakeflow/ebpf/include/abi.h": {
       "baseSHA256": "e2fdda7430fe9c2a5f7203d540db43bf8dda7b8e62c8b9555e731924a7d069b1",
-      "sha256": "73ddc77b9458ca79160effe7849dfbfd5885e12bd60d06d01eb1c0d3c1479e8b",
-      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage"
+      "sha256": "c7bf47e1556eb9c269e19faed410b6c19c0fbc89c58e5946aa9e5d5202a94ce7",
+      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage; GPL-2.0-only axiomatic decoupling: per-protocol TCP/UDP injection settings, min_hops gate, and per-interface protocol masks"
     },
     "fakeflow/ebpf/bpf/maps.h": {
       "baseSHA256": "f70ee07cbbad2efc663b80a7dc617682274e6e43cd746f6ff9d922e105ffe766",
@@ -90,8 +90,8 @@
     },
     "fakeflow/ebpf/bpf/observer.bpf.c": {
       "baseSHA256": "460ebce39e8e7324d10ebe5e7db298d141a835af7b1bb176bc487d82edfcce96",
-      "sha256": "5979f9cc29f53c7926a0d3a8640547ab3f739b1adf67e4c3ebe2fbf4f537ce67",
-      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage"
+      "sha256": "0bfc61bca8b20f90d92669325e6853be17dd21ae393303f855127c964df5038e",
+      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage; GPL-2.0-only axiomatic decoupling: per-protocol TCP/UDP injection settings, min_hops gate, and per-interface protocol masks"
     },
     "fakeflow/ebpf/bpf/builder.bpf.c": {
       "baseSHA256": "7f82c0031bbcebb6b04b27db992173bcc6316800ba384d406fe844d9e1d1a418",
@@ -100,13 +100,13 @@
     },
     "fakeflow/ebpf/user/fakeflow.h": {
       "baseSHA256": "62a6ade372b4ec5948fe4282a8d43ec1ad0fd7490f17c72d104244186f845a75",
-      "sha256": "e9f7686db9ea8bc72a5744ec807a528474b039d2a60b6d2292e546168f69b120",
-      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage"
+      "sha256": "38d9b6440bcfd30b09d5481ce482ce6513467e2fe8f5b2587adfe62eab3b4b5b",
+      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage; GPL-2.0-only axiomatic decoupling: per-protocol TCP/UDP injection settings, min_hops gate, and per-interface protocol masks"
     },
     "fakeflow/ebpf/user/config.c": {
       "baseSHA256": "9aaf3d0fbfe45b43321cd9567d6237dc1be3cc8172cf03ae6b64d6a6acabddad",
-      "sha256": "caeb986c605e5c4bd30d740e79e4c0f588afcbe9d314a96385e474d200c9c3ae",
-      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage"
+      "sha256": "303d90e26f3392f04d5be6e4f13e5e0040e40476f81cbf61fcf13761068e1476",
+      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage; GPL-2.0-only axiomatic decoupling: per-protocol TCP/UDP injection settings, min_hops gate, and per-interface protocol masks"
     },
     "fakeflow/ebpf/user/templates.c": {
       "baseSHA256": "de82bca505889d77415c775c18f78d6888393368ec444d9fb2ebf86d407da1ae",
@@ -115,8 +115,8 @@
     },
     "fakeflow/tests/config_test.c": {
       "baseSHA256": "bc46c9e4788a6f18fdee77656ed83abbddc7943a8f1f81bf8a6787f4f729bb99",
-      "sha256": "9705b0c58bab9cca85b5519297cbc01366709cf3856a171cadfe0ffaf29260d0",
-      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage"
+      "sha256": "bc823396d752c8a78003d5ca51e3d4fb1ccf863c7e401a7a0c4dfd35b24a3c62",
+      "reason": "GPL-2.0-only bounded multi-template v2: generation/slot rotation, complete candidate publication, strict parser and regression coverage; GPL-2.0-only axiomatic decoupling: per-protocol TCP/UDP injection settings, min_hops gate, and per-interface protocol masks"
     },
     "fakehttp/include/pkt_contract.h": {
       "baseSHA256": null,
@@ -160,12 +160,12 @@
     },
     "fakesip/include/ipv4pkt.h": {
       "baseSHA256": "81d1fb8452ad025218267883e61559ad8599c54b639835dbeed932c4b2d21588",
-      "sha256": "1e259781f4500e31744e9e8b004f6c961a5046887f642ce4c2b9e1245503f885",
+      "sha256": "1730de57e0bd75f3b346852c94fcf96a8217e0952fc53d23f0bac1ece84b27e1",
       "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
     },
     "fakesip/include/ipv6pkt.h": {
       "baseSHA256": "409e29b3d148ddf87df62c548e002a7b3c8bcf1d58e0e7a4370981941ba315e8",
-      "sha256": "241c4b34587eae24f92010c6e3c9aadc0e4ebbb7ce775862e911cd07a3eb4039",
+      "sha256": "e5bf8cfa35e1aa9fce36d4ab4def7467389760ecd7cfec6cd568bddb9da5fa04",
       "reason": "GPL-3.0-or-later axiomatic decoupling: explicit packet contract header, independent min_hops gate, FakeHTTP FIFO payload rotation, and FakeSIP unknown-TTL fallback"
     },
     "fakesip/include/globvar.h": {

@@ -32,6 +32,18 @@ static int boolean(char *v, __u32 *out) {
     else return -1;
     return 0;
 }
+static int parse_protocols(char *v, unsigned *mask) {
+    char compact[128]; unsigned n = 0;
+    for (char *p = v; *p && n < sizeof(compact) - 1; p++)
+        if (!isspace((unsigned char)*p)) compact[n++] = *p;
+    compact[n] = 0;
+    if (!strcmp(compact, "[\"tcp\"]")) { *mask = FF_PROTO_TCP; return 0; }
+    if (!strcmp(compact, "[\"udp\"]")) { *mask = FF_PROTO_UDP; return 0; }
+    if (!strcmp(compact, "[\"tcp\",\"udp\"]") || !strcmp(compact, "[\"udp\",\"tcp\"]")) {
+        *mask = FF_PROTO_BOTH; return 0;
+    }
+    return -1;
+}
 int ff_config_read(const char *path, struct ff_options *o, char *error, size_t cap) {
     memset(o, 0, sizeof(*o));
     o->kernel = (struct ff_config){.tcp_enabled=1,.udp_enabled=1,.directions=3,
@@ -42,9 +54,12 @@ int ff_config_read(const char *path, struct ff_options *o, char *error, size_t c
     strcpy(o->tcp[0].text,"www.example.com"); strcpy(o->udp[0].text,"sip:service@example.com");
     FILE *f = fopen(path,"r");
     if (!f) { snprintf(error,cap,"%s: %s",path,strerror(errno)); return -1; }
-    char line[2048], section[32]="", seen[256][96];
+    char line[2048], section[32]="", seen[512][96];
     unsigned lineno=0, count=0, version=0, sections_seen=0;
     unsigned arrays[2]={}, legacy[2]={};
+    __u32 global_min_hops = 0;
+    int has_tcp_ttl=0, has_tcp_repeat=0, has_tcp_est=0, has_tcp_pct=0, has_tcp_min_hops=0;
+    int has_udp_ttl=0, has_udp_repeat=0, has_udp_est=0, has_udp_pct=0, has_udp_min_hops=0;
     int bad=0;
     while (fgets(line,sizeof(line),f)) {
         lineno++;
@@ -66,6 +81,7 @@ int ff_config_read(const char *path, struct ff_options *o, char *error, size_t c
             }
             if (!strcmp(s,"[[interfaces]]")) {
                 if (o->device_count==FF_INTERFACES) { bad=1; break; }
+                o->devices[o->device_count].proto_mask = FF_PROTO_BOTH;
                 o->device_count++; strcpy(section,"interfaces"); continue;
             }
             const char *sections[]={"tcp","udp","injection","runtime"};
@@ -87,7 +103,7 @@ int ff_config_read(const char *path, struct ff_options *o, char *error, size_t c
             !strcmp(section,"tcp.templates")?arrays[0]:!strcmp(section,"udp.templates")?arrays[1]:0;
         if (snprintf(id,sizeof(id),"%s.%u.%s",section,index,s)>=(int)sizeof(id)) { bad=1; break; }
         for(unsigned i=0;i<count;i++) if (!strcmp(seen[i],id)) bad=1;
-        if(bad || count==256) { bad=1; break; }
+        if(bad || count==512) { bad=1; break; }
         strcpy(seen[count++],id);
         int rc=-1;
 #define KEY(sec,key) (!strcmp(section,sec) && !strcmp(s,key))
@@ -105,6 +121,7 @@ int ff_config_read(const char *path, struct ff_options *o, char *error, size_t c
                 else rc=-1;
             }
         }
+        if (KEY("interfaces","protocols")) rc=parse_protocols(v,&o->devices[o->device_count-1].proto_mask);
         BOOL("tcp","enabled",o->kernel.tcp_enabled);
         BOOL("udp","enabled",o->kernel.udp_enabled);
         STR("tcp","payload",o->tcp[0].kind); STR("udp","payload",o->udp[0].kind);
@@ -137,12 +154,23 @@ int ff_config_read(const char *path, struct ff_options *o, char *error, size_t c
             if(!strcmp(v,"\"both\"")) {o->kernel.udp_both=1;rc=0;}
         }
         NUM("tcp","max_batches",o->kernel.tcp_batches,1,32);
+        if (KEY("tcp","ttl")) { rc=number(v,&o->kernel.tcp_ttl,1,255); has_tcp_ttl=1; }
+        if (KEY("tcp","repeat")) { rc=number(v,&o->kernel.tcp_repeat,1,8); has_tcp_repeat=1; }
+        if (KEY("tcp","estimate_hops")) { rc=boolean(v,&o->kernel.tcp_estimate_hops); has_tcp_est=1; }
+        if (KEY("tcp","dynamic_percent")) { rc=number(v,&o->kernel.tcp_percent,0,99); has_tcp_pct=1; }
+        if (KEY("tcp","min_hops")) { rc=number(v,&o->kernel.tcp_min_hops,0,254); has_tcp_min_hops=1; }
         NUM("udp","initial_packets",o->kernel.udp_packets,1,32);
         NUM("udp","idle_timeout_seconds",o->kernel.udp_idle,1,3600);
+        if (KEY("udp","ttl")) { rc=number(v,&o->kernel.udp_ttl,1,255); has_udp_ttl=1; }
+        if (KEY("udp","repeat")) { rc=number(v,&o->kernel.udp_repeat,1,8); has_udp_repeat=1; }
+        if (KEY("udp","estimate_hops")) { rc=boolean(v,&o->kernel.udp_estimate_hops); has_udp_est=1; }
+        if (KEY("udp","dynamic_percent")) { rc=number(v,&o->kernel.udp_percent,0,99); has_udp_pct=1; }
+        if (KEY("udp","min_hops")) { rc=number(v,&o->kernel.udp_min_hops,0,254); has_udp_min_hops=1; }
         NUM("injection","ttl",o->kernel.ttl,1,255);
         NUM("injection","repeat",o->kernel.repeat,1,8);
         BOOL("injection","estimate_hops",o->kernel.estimate_hops);
         NUM("injection","dynamic_percent",o->kernel.percent,0,99);
+        NUM("injection","min_hops",global_min_hops,0,254);
         NUM("injection","max_packets_per_second",o->kernel.rate,1,1000000);
         NUM("injection","burst",o->kernel.burst,1,1000000);
         BOOL("injection","allow_private",o->kernel.allow_private);
@@ -157,6 +185,21 @@ int ff_config_read(const char *path, struct ff_options *o, char *error, size_t c
     if(!version || !o->device_count) {snprintf(error,cap,"version = 1 or 2 and [[interfaces]] required");return -1;}
     if((version==1 && (arrays[0] || arrays[1])) || (version==2 && (legacy[0] || legacy[1]))) {
         snprintf(error,cap,"version 1 uses singleton payloads; version 2 uses template arrays only");return -1;
+    }
+    o->kernel.tcp_ttl = has_tcp_ttl ? o->kernel.tcp_ttl : o->kernel.ttl;
+    o->kernel.tcp_repeat = has_tcp_repeat ? o->kernel.tcp_repeat : o->kernel.repeat;
+    o->kernel.tcp_estimate_hops = has_tcp_est ? o->kernel.tcp_estimate_hops : o->kernel.estimate_hops;
+    o->kernel.tcp_percent = has_tcp_pct ? o->kernel.tcp_percent : o->kernel.percent;
+    o->kernel.tcp_min_hops = has_tcp_min_hops ? o->kernel.tcp_min_hops : global_min_hops;
+    o->kernel.udp_ttl = has_udp_ttl ? o->kernel.udp_ttl : o->kernel.ttl;
+    o->kernel.udp_repeat = has_udp_repeat ? o->kernel.udp_repeat : o->kernel.repeat;
+    o->kernel.udp_estimate_hops = has_udp_est ? o->kernel.udp_estimate_hops : o->kernel.estimate_hops;
+    o->kernel.udp_percent = has_udp_pct ? o->kernel.udp_percent : o->kernel.percent;
+    o->kernel.udp_min_hops = has_udp_min_hops ? o->kernel.udp_min_hops : global_min_hops;
+
+    if ((!o->kernel.tcp_estimate_hops && o->kernel.tcp_percent) ||
+        (!o->kernel.udp_estimate_hops && o->kernel.udp_percent)) {
+        snprintf(error,cap,"dynamic_percent requires estimate_hops = true");return -1;
     }
     o->kernel.tcp_template_count=version==1?1:arrays[0];
     o->kernel.udp_template_count=version==1?1:arrays[1];
@@ -173,7 +216,10 @@ int ff_config_read(const char *path, struct ff_options *o, char *error, size_t c
             snprintf(error,cap,"duplicate interface %s",n);return -1;
         }
     }
-    if(o->kernel.burst<o->kernel.repeat) {snprintf(error,cap,"burst must be >= repeat");return -1;}
+    __u32 max_repeat = o->kernel.repeat;
+    if (o->kernel.tcp_repeat > max_repeat) max_repeat = o->kernel.tcp_repeat;
+    if (o->kernel.udp_repeat > max_repeat) max_repeat = o->kernel.udp_repeat;
+    if(o->kernel.burst < max_repeat) {snprintf(error,cap,"burst must be >= repeat");return -1;}
     for(unsigned i=0;i<count;i++) {
         if((!strcmp(o->tcp[0].kind,"custom") && !strcmp(seen[i],"tcp.0.hostname")) ||
            (!strcmp(o->udp[0].kind,"custom") && !strcmp(seen[i],"udp.0.sip_uri"))) {

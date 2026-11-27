@@ -78,5 +78,28 @@ int main(void) {
     }
     snprintf(text,sizeof(text),"%s[[tcp.templates]]\npayload=\"http\"\nhostname=\"a.example\"\n",base);
     assert(parse_text(text,&o)); /* v1 cannot silently consume arrays */
-    puts("PASS: v1 compatibility, mixed v2 templates, counts 1..16/17, strict conflicts, TLS/SNI, exact binary bounds");return 0;
+    /* Decoupled per-protocol injection settings and per-interface protocol masks. */
+    const char *decoupled =
+        "version = 2\n"
+        "[[interfaces]]\nname = \"wan0\"\nmode = \"l3\"\nprotocols = [\"tcp\"]\n"
+        "[[interfaces]]\nname = \"wan1\"\nmode = \"l3\"\nprotocols = [\"udp\"]\n"
+        "[tcp]\nenabled = true\nttl = 4\nrepeat = 3\nestimate_hops = true\ndynamic_percent = 50\nmin_hops = 8\n"
+        "[[tcp.templates]]\npayload = \"http\"\nhostname = \"a.example\"\n"
+        "[udp]\nenabled = true\nttl = 2\nrepeat = 1\nestimate_hops = false\ndynamic_percent = 0\nmin_hops = 0\n"
+        "[[udp.templates]]\npayload = \"sip\"\nsip_uri = \"sip:user@a.example\"\n";
+    assert(!parse_text(decoupled, &o));
+    assert(o.device_count == 2 && o.devices[0].proto_mask == FF_PROTO_TCP && o.devices[1].proto_mask == FF_PROTO_UDP);
+    assert(o.kernel.tcp_ttl == 4 && o.kernel.tcp_repeat == 3 && o.kernel.tcp_estimate_hops == 1 && o.kernel.tcp_percent == 50 && o.kernel.tcp_min_hops == 8);
+    assert(o.kernel.udp_ttl == 2 && o.kernel.udp_repeat == 1 && o.kernel.udp_estimate_hops == 0 && o.kernel.udp_percent == 0 && o.kernel.udp_min_hops == 0);
+    /* Contradictory per-protocol dynamic_percent with estimate_hops = false must still be rejected. */
+    assert(parse_text(
+        "version = 2\n[[interfaces]]\nname = \"wan0\"\n"
+        "[tcp]\nenabled = true\nestimate_hops = false\ndynamic_percent = 25\n"
+        "[[tcp.templates]]\npayload = \"http\"\nhostname = \"a.example\"\n"
+        "[udp]\nenabled = false\n", &o));
+    /* Invalid interface protocols array must be rejected. */
+    assert(parse_text(
+        "version = 2\n[[interfaces]]\nname = \"wan0\"\nprotocols = [\"icmp\"]\n"
+        "[tcp]\nenabled = false\n[udp]\nenabled = false\n", &o));
+    puts("PASS: v1 compatibility, mixed v2 templates, counts 1..16/17, per-protocol injection/interfaces, strict conflicts, TLS/SNI, exact binary bounds");return 0;
 }
