@@ -4,7 +4,7 @@
 #include "../include/abi.h"
 #include <stddef.h>
 #include <net/if.h>
-struct ff_device { char name[IF_NAMESIZE]; unsigned mode; };
+struct ff_device { char name[IF_NAMESIZE]; unsigned mode, proto_mask; };
 struct ff_payload {
     char kind[16], text[254], file[1024];
     struct ff_template value;

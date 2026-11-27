@@ -8,6 +8,7 @@
 'require faketraffic.tcp as tcp';
 'require faketraffic.udp as udp';
 'require faketraffic.diagnostics as diagnostics';
+'require faketraffic.contract as contract';
 
 var listService = rpc.declare({ object: 'service', method: 'list', params: [ 'name' ], expect: { '': {} } });
 var readStatus = rpc.declare({ object: 'faketraffic', method: 'status', expect: { '': {} } });
@@ -128,7 +129,7 @@ return view.extend({
 				Number(value('advanced', 'pct')) > 0)
 				return Promise.reject(new Error(_('Disable dynamic TTL before disabling hop estimation.')));
 			if (value('globals', 'backend') !== 'ebpf' && value('globals', 'enabled') === '1' && value('main', 'enabled') === '1' &&
-				Number(tq == null || tq === '' || tq === '-1' ? 512 : tq) === Number(uq))
+				Number(tq == null || tq === '' || tq === '-1' ? contract.TCP_QUEUE_DEFAULT : tq) === Number(uq))
 				return Promise.reject(new Error(_('TCP and UDP must use different NFQUEUE numbers.')));
 			return parse();
 		};

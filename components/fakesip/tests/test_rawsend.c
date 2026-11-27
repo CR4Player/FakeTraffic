@@ -187,5 +187,16 @@ int main(void)
         return fail("a successful sendto must remain successful");
     }
 
+    g_ctx.ttl = 3;
+    g_ctx.min_hops = 0;
+    if (hop_gate_threshold() != 3) {
+        return fail("default hop gate must match ttl");
+    }
+    g_ctx.min_hops = 9;
+    if (hop_gate_threshold() != 9) {
+        return fail("explicit min_hops must decouple hop gate from ttl");
+    }
+    g_ctx.min_hops = 0;
+
     return EXIT_SUCCESS;
 }

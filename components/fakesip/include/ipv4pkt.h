@@ -25,7 +25,11 @@
 #include <netinet/udp.h>
 #include <sys/socket.h>
 
-#define FS_FAKE_IPV4_ID UINT16_C(0x4653)
+#include "pkt_contract.h"
+
+#ifndef FS_FAKE_IPV4_ID
+#error "pkt_contract.h must define FS_FAKE_IPV4_ID"
+#endif
 
 int fs_pkt4_parse(void *pkt_data, int pkt_len, struct sockaddr *saddr,
                   struct sockaddr *daddr, uint8_t *ttl,

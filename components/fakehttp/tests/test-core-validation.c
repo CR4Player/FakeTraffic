@@ -177,10 +177,48 @@ static int test_srcinfo_interfaces(void)
 }
 
 
+static int test_payload_rotation_order(void)
+{
+    struct payload_info payloads[] = {
+        {FH_PAYLOAD_HTTP, "first.example"},
+        {FH_PAYLOAD_HTTP, "second.example"},
+        {FH_PAYLOAD_HTTP, "third.example"},
+        {FH_PAYLOAD_END, NULL},
+    };
+    static const char *const expected[] = {
+        "Host: first.example\r\n",
+        "Host: second.example\r\n",
+        "Host: third.example\r\n",
+        "Host: first.example\r\n",
+    };
+    uint8_t *payload;
+    size_t payload_len, i;
+
+    g_ctx.plinfo = payloads;
+    if (fh_payload_setup() < 0) {
+        return -1;
+    }
+    for (i = 0; i < sizeof(expected) / sizeof(expected[0]); i++) {
+        th_payload_get(&payload, &payload_len);
+        if (!memmem(payload, payload_len, expected[i], strlen(expected[i]))) {
+            fh_payload_cleanup();
+            return -1;
+        }
+    }
+    fh_payload_cleanup();
+    return 0;
+}
+
+
 int main(void)
 {
     if (run_payload_case(1200, 1) < 0 || run_payload_case(1201, 0) < 0) {
         fprintf(stderr, "payload boundary validation failed\n");
+        return EXIT_FAILURE;
+    }
+
+    if (test_payload_rotation_order() < 0) {
+        fprintf(stderr, "payload rotation order validation failed\n");
         return EXIT_FAILURE;
     }
 

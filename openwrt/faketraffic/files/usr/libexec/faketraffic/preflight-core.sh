@@ -1,10 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Fixed-schema checks. No packet, module, route, firewall or configuration writes.
+if [ -r /usr/libexec/faketraffic/contract.sh ]; then
+    . /usr/libexec/faketraffic/contract.sh
+elif [ -n "${FT_CONTRACT_SH:-}" ] && [ -r "$FT_CONTRACT_SH" ]; then
+    . "$FT_CONTRACT_SH"
+fi
 ft_error() { case ",$ft_errors," in *"\"$1\""*) ;; *) ft_errors="${ft_errors:+$ft_errors,}\"$1\"";; esac; }
 ft_warning() { case ",$ft_warnings," in *"\"$1\""*) ;; *) ft_warnings="${ft_warnings:+$ft_warnings,}\"$1\"";; esac; }
 ft_uint() { case "$1" in ''|*[!0-9]*) return 1;; esac; [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
 ft_path() { case "$1" in /*) ;; *) return 1;; esac; case "$1" in *[!A-Za-z0-9_./:@%+=-]*) return 1;; esac; [ "${#1}" -le 1023 ]; }
-ft_device() { case "$1" in ''|*[!A-Za-z0-9_.-]*) return 1;; esac; [ "${#1}" -le 15 ]; }
+ft_device() { case "$1" in ''|*[!A-Za-z0-9_.-]*) return 1;; esac; [ "${#1}" -le "${FT_SCHEMA_IFNAME_MAX_BYTES:-15}" ]; }
 ft_add_device() {
     ft_device "$1" || { ft_error INVALID_DEVICE; return; }
     case " $ft_devices " in *" $1 "*) ;; *) ft_devices="${ft_devices:+$ft_devices }$1"; ft_device_count=$((ft_device_count + 1));; esac
@@ -20,7 +25,7 @@ ft_tcp_payload() {
     config_get_bool enabled "$1" enabled 1
     [ "$enabled" = 1 ] || return
     ft_tcp_payload_count=$((ft_tcp_payload_count + 1))
-    [ "$ft_tcp_payload_count" -le 16 ] || { ft_error TCP_TEMPLATE_LIMIT_EXCEEDED; return; }
+    [ "$ft_tcp_payload_count" -le "${FT_SCHEMA_EBPF_TEMPLATE_MAX:-16}" ] || { ft_error TCP_TEMPLATE_LIMIT_EXCEEDED; return; }
     config_get kind "$1" type http
     config_get value "$1" payload
     case "$kind" in
@@ -34,7 +39,7 @@ payload_file = \"$value\"
 ";;
         http|https)
             case "$value" in ''|*[!A-Za-z0-9.-]*) ft_error INVALID_HOSTNAME;; esac
-            [ "${#value}" -le 253 ] || ft_error INVALID_HOSTNAME
+            [ "${#value}" -le "${FT_SCHEMA_HOSTNAME_MAX_BYTES:-253}" ] || ft_error INVALID_HOSTNAME
             ft_tcp_kind=http; [ "$kind" != https ] || ft_tcp_kind=tls
             # Only the restricted alphabet above is interpolated into TOML.
             case "$value" in ''|*[!A-Za-z0-9.-]*) return;; esac
@@ -51,7 +56,7 @@ hostname = \"$value\"
 ft_udp_file() {
     ft_udp_files=$((ft_udp_files + 1))
     ft_udp_payload_count=$((ft_udp_payload_count + 1))
-    [ "$ft_udp_payload_count" -le 16 ] || { ft_error UDP_TEMPLATE_LIMIT_EXCEEDED; return; }
+    [ "$ft_udp_payload_count" -le "${FT_SCHEMA_EBPF_TEMPLATE_MAX:-16}" ] || { ft_error UDP_TEMPLATE_LIMIT_EXCEEDED; return; }
     ft_path "$1" || { ft_error INVALID_PAYLOAD_PATH; return; }
     ft_payload_file_check "$1"
     ft_udp_templates="$ft_udp_templates
@@ -63,10 +68,10 @@ payload_file = \"$1\"
 ft_udp_uri() {
     ft_udp_uris=$((ft_udp_uris + 1))
     ft_udp_payload_count=$((ft_udp_payload_count + 1))
-    [ "$ft_udp_payload_count" -le 16 ] || { ft_error UDP_TEMPLATE_LIMIT_EXCEEDED; return; }
+    [ "$ft_udp_payload_count" -le "${FT_SCHEMA_EBPF_TEMPLATE_MAX:-16}" ] || { ft_error UDP_TEMPLATE_LIMIT_EXCEEDED; return; }
     case "$1" in sip:?*) ;; *) ft_error INVALID_SIP_URI; return;; esac
     case "$1" in *[!A-Za-z0-9_./:@%+=?\;-]*) ft_error INVALID_SIP_URI; return;; esac
-    [ "${#1}" -le 120 ] || ft_error INVALID_SIP_URI
+    [ "${#1}" -le "${FT_SCHEMA_SIP_URI_MAX_BYTES:-120}" ] || ft_error INVALID_SIP_URI
     ft_udp_templates="$ft_udp_templates
 [[udp.templates]]
 payload = \"sip\"
@@ -79,7 +84,7 @@ ft_payload_file_check() {
     [ -f "$1" ] || { ft_error PAYLOAD_FILE_UNAVAILABLE; return; }
     local bytes
     bytes="$(wc -c < "$1" 2>/dev/null)" || { ft_error PAYLOAD_FILE_UNAVAILABLE; return; }
-    ft_uint "$bytes" 1 1200 || ft_error PAYLOAD_SIZE_UNSUPPORTED
+    ft_uint "$bytes" "${FT_SCHEMA_PAYLOAD_MIN_BYTES:-1}" "${FT_SCHEMA_PAYLOAD_MAX_BYTES:-1200}" || ft_error PAYLOAD_SIZE_UNSUPPORTED
 }
 ft_environment() {
     local version major minor device link_type command active_pid checkpoint=false
@@ -111,7 +116,7 @@ ft_environment() {
     ft_warning OFFLOAD_COEXISTENCE_NOT_TESTED
 }
 ft_preflight() {
-    local tcp udp tttl uttl trepeat urepeat thop uhop tpct upct value mode networks interfaces profile count
+    local tcp udp tttl uttl trepeat urepeat thop uhop tpct upct tminhops uminhops value mode networks interfaces profile count
     ft_errors= ft_warnings= ft_devices= ft_device_count=0
     ft_tcp_payload_count=0 ft_udp_payload_count=0 ft_udp_files=0 ft_udp_uris=0
     ft_tcp_templates= ft_udp_templates=
@@ -128,12 +133,15 @@ ft_preflight() {
     case "$ft_udp_trigger" in egress|both) ;; *) ft_error INVALID_UDP_TRIGGER;; esac
     config_get ft_mode globals ebpf_interface_mode l3
     case "$ft_mode" in l3|ethernet|pppoe) ;; *) ft_error INVALID_LINK_MODE;; esac
-    tttl=3 trepeat=2 thop=0 tpct=0 uttl=3 urepeat=1 uhop=0 upct=0
+    tttl=${FT_SCHEMA_TTL_DEFAULT:-3} trepeat=${FT_SCHEMA_NFQ_TCP_REPEAT_DEFAULT:-2} thop=0 tpct=0 tminhops=0
+    uttl=${FT_SCHEMA_TTL_DEFAULT:-3} urepeat=${FT_SCHEMA_NFQ_UDP_REPEAT_DEFAULT:-1} uhop=0 upct=0 uminhops=0
+    ft_tcp_devices= ft_udp_devices=
     if [ "$tcp" = 1 ]; then
-        config_get tttl advanced ttl 3; [ "$tttl" != -1 ] || tttl=3
-        config_get trepeat advanced repeat 2; [ "$trepeat" != -1 ] || trepeat=2
+        config_get tttl advanced ttl "${FT_SCHEMA_TTL_DEFAULT:-3}"; [ "$tttl" != -1 ] || tttl=${FT_SCHEMA_TTL_DEFAULT:-3}
+        config_get trepeat advanced repeat "${FT_SCHEMA_NFQ_TCP_REPEAT_DEFAULT:-2}"; [ "$trepeat" != -1 ] || trepeat=${FT_SCHEMA_NFQ_TCP_REPEAT_DEFAULT:-2}
         config_get_bool thop advanced disable_estimation 0
         config_get tpct advanced pct 0; [ "$tpct" != -1 ] || tpct=0
+        config_get tminhops advanced min_hops 0; [ "$tminhops" != -1 ] || tminhops=0
         config_list_foreach globals interface ft_add_device
         config_foreach ft_tcp_payload payload
         [ "$ft_tcp_payload_count" -gt 0 ] || ft_error TCP_TEMPLATE_REQUIRED
@@ -141,20 +149,27 @@ ft_preflight() {
         config_get value advanced fwmark_bypassing -1; [ "$value" = -1 ] || ft_error CUSTOM_MARK_POLICY_UNSUPPORTED
         config_get value advanced fwmark_handle -1; [ "$value" = -1 ] || ft_error CUSTOM_MARK_POLICY_UNSUPPORTED
         for mode in skip use_iptables; do config_get_bool value advanced "$mode" 0; [ "$value" = 0 ] || ft_error MANUAL_FIREWALL_UNSUPPORTED; done
+        ft_uint "$tttl" "${FT_SCHEMA_TTL_MIN:-1}" "${FT_SCHEMA_TTL_MAX:-255}" || ft_error INVALID_TTL
+        ft_uint "$trepeat" "${FT_SCHEMA_EBPF_REPEAT_MIN:-1}" "${FT_SCHEMA_EBPF_REPEAT_MAX:-8}" || ft_error REPEAT_RANGE_UNSUPPORTED
+        ft_uint "$tpct" "${FT_SCHEMA_DYNAMIC_PCT_MIN:-0}" "${FT_SCHEMA_DYNAMIC_PCT_MAX:-99}" || ft_error INVALID_DYNAMIC_PERCENT
+        ft_uint "$tminhops" "${FT_SCHEMA_MIN_HOPS_MIN:-0}" "${FT_SCHEMA_MIN_HOPS_MAX:-254}" || ft_error INVALID_HOP_SETTINGS
+        [ "$thop" = 0 ] || [ "$tpct" = 0 ] || ft_error INVALID_HOP_SETTINGS
+        [ -n "$ft_devices" ] || ft_error DEVICE_COUNT_UNSUPPORTED
     fi
     ft_tcp_devices="$ft_devices"
     if [ "$udp" = 1 ]; then
-        config_get uttl main ttl 3
-        config_get urepeat main repeat 1
+        config_get uttl main ttl "${FT_SCHEMA_TTL_DEFAULT:-3}"
+        config_get urepeat main repeat "${FT_SCHEMA_NFQ_UDP_REPEAT_DEFAULT:-1}"
         config_get_bool uhop main no_hop_estimate 0
         config_get upct main dynamic_pct 0
+        config_get uminhops main min_hops 0
         config_get_bool value main all_interfaces 0; [ "$value" = 0 ] || ft_error ALL_INTERFACES_UNSUPPORTED
         config_get_bool value main ipv4 1; [ "$value" = 1 ] || ft_error IP_FAMILY_SELECTION_UNSUPPORTED
         config_get_bool value main ipv6 1; [ "$value" = 1 ] || ft_error IP_FAMILY_SELECTION_UNSUPPORTED
-        config_get value main fwmark 0x10000
-        case "$value" in 0x10000|65536) ;; *) ft_error CUSTOM_MARK_POLICY_UNSUPPORTED;; esac
-        config_get value main fwmask 0x10000
-        case "$value" in 0x10000|65536) ;; *) ft_error CUSTOM_MARK_POLICY_UNSUPPORTED;; esac
+        config_get value main fwmark "${FT_SCHEMA_DEFAULT_FWMARK_HEX:-0x10000}"
+        case "$value" in "${FT_SCHEMA_DEFAULT_FWMARK_HEX:-0x10000}"|"${FT_SCHEMA_DEFAULT_FWMARK_DEC:-65536}") ;; *) ft_error CUSTOM_MARK_POLICY_UNSUPPORTED;; esac
+        config_get value main fwmask "${FT_SCHEMA_DEFAULT_FWMASK_HEX:-0x10000}"
+        case "$value" in "${FT_SCHEMA_DEFAULT_FWMASK_HEX:-0x10000}"|"${FT_SCHEMA_DEFAULT_FWMASK_DEC:-65536}") ;; *) ft_error CUSTOM_MARK_POLICY_UNSUPPORTED;; esac
         for mode in skip_firewall use_iptables; do config_get_bool value main "$mode" 0; [ "$value" = 0 ] || ft_error MANUAL_FIREWALL_UNSUPPORTED; done
         ft_devices= ft_device_count=0
         config_get mode main interface_mode network
@@ -164,11 +179,8 @@ ft_preflight() {
             auto) config_list_foreach main network ft_network; config_list_foreach main interface ft_add_device;;
             *) ft_error INVALID_INTERFACE_MODE;;
         esac
-        if [ "$tcp" = 1 ]; then
-            # Compare sets, never silently widen either protocol's target set.
-            for value in $ft_tcp_devices; do case " $ft_devices " in *" $value "*) ;; *) ft_error DIFFERENT_PROTOCOL_DEVICES;; esac; done
-            for value in $ft_devices; do case " $ft_tcp_devices " in *" $value "*) ;; *) ft_error DIFFERENT_PROTOCOL_DEVICES;; esac; done
-        fi
+        ft_udp_devices="$ft_devices"
+        [ -n "$ft_udp_devices" ] || ft_error DEVICE_COUNT_UNSUPPORTED
         config_get profile main sip_profile china_all
         case "$profile" in
             standard) ;;
@@ -188,38 +200,53 @@ ft_preflight() {
         config_list_foreach main payload_file ft_udp_file
         if [ "$profile" = standard ] && [ "$ft_udp_files" -eq 0 ]; then ft_udp_uri sip:service@example.com; fi
         [ "$ft_udp_payload_count" -gt 0 ] || ft_error UDP_TEMPLATE_REQUIRED
+        ft_uint "$uttl" "${FT_SCHEMA_TTL_MIN:-1}" "${FT_SCHEMA_TTL_MAX:-255}" || ft_error INVALID_TTL
+        ft_uint "$urepeat" "${FT_SCHEMA_EBPF_REPEAT_MIN:-1}" "${FT_SCHEMA_EBPF_REPEAT_MAX:-8}" || ft_error REPEAT_RANGE_UNSUPPORTED
+        ft_uint "$upct" "${FT_SCHEMA_DYNAMIC_PCT_MIN:-0}" "${FT_SCHEMA_DYNAMIC_PCT_MAX:-99}" || ft_error INVALID_DYNAMIC_PERCENT
+        ft_uint "$uminhops" "${FT_SCHEMA_MIN_HOPS_MIN:-0}" "${FT_SCHEMA_MIN_HOPS_MAX:-254}" || ft_error INVALID_HOP_SETTINGS
+        [ "$uhop" = 0 ] || [ "$upct" = 0 ] || ft_error INVALID_HOP_SETTINGS
         ft_warning UDP_TRIGGER_AND_WINDOW_CHANGES
-    else
-        ft_devices="$ft_tcp_devices"
     fi
+    ft_devices= ft_device_count=0
+    for value in $ft_tcp_devices $ft_udp_devices; do ft_add_device "$value"; done
     count=0; for value in $ft_devices; do count=$((count + 1)); done
-    [ "$count" -gt 0 ] && [ "$count" -le 8 ] || ft_error DEVICE_COUNT_UNSUPPORTED
-    if [ "$tcp" = 1 ] && [ "$udp" = 1 ]; then
-        [ "$tttl:$trepeat:$thop:$tpct" = "$uttl:$urepeat:$uhop:$upct" ] || ft_error DIFFERENT_PROTOCOL_INJECTION_SETTINGS
-    fi
+    [ "$count" -gt 0 ] && [ "$count" -le "${FT_SCHEMA_EBPF_MAX_DEVICES:-8}" ] || ft_error DEVICE_COUNT_UNSUPPORTED
+    ft_tcp_ttl="$tttl" ft_tcp_repeat="$trepeat" ft_tcp_nohop="$thop" ft_tcp_percent="$tpct" ft_tcp_min_hops="$tminhops"
+    ft_udp_ttl="$uttl" ft_udp_repeat="$urepeat" ft_udp_nohop="$uhop" ft_udp_percent="$upct" ft_udp_min_hops="$uminhops"
     ft_ttl="$tttl" ft_repeat="$trepeat" ft_nohop="$thop" ft_percent="$tpct"
     if [ "$tcp" != 1 ]; then ft_ttl="$uttl" ft_repeat="$urepeat" ft_nohop="$uhop" ft_percent="$upct"; fi
-    ft_uint "$ft_ttl" 1 255 || ft_error INVALID_TTL
-    ft_uint "$ft_repeat" 1 8 || ft_error REPEAT_RANGE_UNSUPPORTED
-    ft_uint "$ft_percent" 0 99 || ft_error INVALID_DYNAMIC_PERCENT
-    [ "$ft_nohop" = 0 ] || [ "$ft_percent" = 0 ] || ft_error INVALID_HOP_SETTINGS
     ft_tcp_enabled="$tcp" ft_udp_enabled="$udp"
     ft_environment
     ft_compatible=false; [ -n "$ft_errors" ] || ft_compatible=true
 }
 ft_preflight_json() {
-    printf '{"schema_version":1,"scope":"saved_config_and_read_only_environment","candidate":"ebpf","configured_backend":"%s","can_attempt":%s,"template_limit":16,"tcp_template_count":%s,"udp_template_count":%s,"load_attach":"not_tested","errors":[%s],"warnings":[%s]}\n' \
-        "$(case "$ft_backend" in nfqueue|ebpf) printf '%s' "$ft_backend";; *) printf unknown;; esac)" "$ft_compatible" "$ft_tcp_payload_count" "$ft_udp_payload_count" "$ft_errors" "$ft_warnings"
+    printf '{"schema_version":1,"scope":"saved_config_and_read_only_environment","candidate":"ebpf","configured_backend":"%s","can_attempt":%s,"template_limit":%s,"tcp_template_count":%s,"udp_template_count":%s,"load_attach":"not_tested","errors":[%s],"warnings":[%s]}\n' \
+        "$(case "$ft_backend" in nfqueue|ebpf) printf '%s' "$ft_backend";; *) printf unknown;; esac)" "$ft_compatible" "${FT_SCHEMA_EBPF_TEMPLATE_MAX:-16}" "$ft_tcp_payload_count" "$ft_udp_payload_count" "$ft_errors" "$ft_warnings"
 }
 ft_render() {
     [ "$ft_compatible" = true ] || return 1
     printf 'version = 2\n'
-    local device estimate=true tcp=false udp=false
+    local device estimate=true tcp_est=true udp_est=true tcp=false udp=false has_tcp has_udp protos
     [ "$ft_nohop" = 0 ] || estimate=false
+    [ "$ft_tcp_nohop" = 0 ] || tcp_est=false
+    [ "$ft_udp_nohop" = 0 ] || udp_est=false
     [ "$ft_tcp_enabled" = 0 ] || tcp=true
     [ "$ft_udp_enabled" = 0 ] || udp=true
-    for device in $ft_devices; do printf '\n[[interfaces]]\nname = "%s"\nmode = "%s"\n' "$device" "$ft_mode"; done
-    printf '\n[tcp]\nenabled = %s\ndirections = ["active", "passive"]\ntfo = "strip-syn"\nmax_batches = 3\n%s' "$tcp" "$ft_tcp_templates"
-    printf '\n[udp]\nenabled = %s\ntrigger = "%s"\ninitial_packets = 5\nidle_timeout_seconds = 30\n%s' "$udp" "$ft_udp_trigger" "$ft_udp_templates"
+    for device in $ft_devices; do
+        has_tcp=0 has_udp=0
+        case " $ft_tcp_devices " in *" $device "*) has_tcp=1;; esac
+        case " $ft_udp_devices " in *" $device "*) has_udp=1;; esac
+        case "$has_tcp:$has_udp" in
+            1:1) protos='["tcp", "udp"]';;
+            1:0) protos='["tcp"]';;
+            0:1) protos='["udp"]';;
+            *) protos='["tcp", "udp"]';;
+        esac
+        printf '\n[[interfaces]]\nname = "%s"\nmode = "%s"\nprotocols = %s\n' "$device" "$ft_mode" "$protos"
+    done
+    printf '\n[tcp]\nenabled = %s\ndirections = ["active", "passive"]\ntfo = "strip-syn"\nmax_batches = 3\nttl = %s\nrepeat = %s\nestimate_hops = %s\ndynamic_percent = %s\nmin_hops = %s\n%s' \
+        "$tcp" "$ft_tcp_ttl" "$ft_tcp_repeat" "$tcp_est" "$ft_tcp_percent" "$ft_tcp_min_hops" "$ft_tcp_templates"
+    printf '\n[udp]\nenabled = %s\ntrigger = "%s"\ninitial_packets = 5\nidle_timeout_seconds = 30\nttl = %s\nrepeat = %s\nestimate_hops = %s\ndynamic_percent = %s\nmin_hops = %s\n%s' \
+        "$udp" "$ft_udp_trigger" "$ft_udp_ttl" "$ft_udp_repeat" "$udp_est" "$ft_udp_percent" "$ft_udp_min_hops" "$ft_udp_templates"
     printf '\n[injection]\nttl = %s\nrepeat = %s\nestimate_hops = %s\ndynamic_percent = %s\nmax_packets_per_second = 1000\nburst = 2000\nallow_private = false\n\n[runtime]\ntcp_entries = 8192\nudp_entries = 8192\nlease_seconds = 10\n' "$ft_ttl" "$ft_repeat" "$estimate" "$ft_percent"
 }

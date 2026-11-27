@@ -100,6 +100,7 @@ append_advanced()
 	config_list_foreach advanced bypass_port append_bypass_port
 	append_number advanced repeat -r
 	append_number advanced ttl -t
+	append_number advanced min_hops -H
 	append_flag advanced use_iptables -z
 }
 
@@ -347,6 +348,7 @@ start_udp() {
 	append_value_arg "$section" fwmask -x
 	append_value_arg "$section" repeat -r
 	append_value_arg "$section" ttl -t
+	append_nonzero_arg "$section" min_hops -H
 	append_nonzero_arg "$section" dynamic_pct -y
 
 	if [ "$all_interfaces" -eq 1 ]; then

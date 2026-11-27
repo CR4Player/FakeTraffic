@@ -2,7 +2,7 @@
 #include "tcp.h"
 #include "udp.h"
 #include "builder.bpf.c"
-static __always_inline int reserve(struct ff_interface *iface,struct ff_config *c,__u64 now) {
+static __always_inline int reserve(struct ff_interface *iface,struct ff_config *c,__u32 repeat,__u64 now) {
     __u32 slot=iface->slot;
     struct ff_budget *b=bpf_map_lookup_elem(&budgets,&slot);
     if(!b) return 0;
@@ -14,7 +14,7 @@ static __always_inline int reserve(struct ff_interface *iface,struct ff_config *
     if(c->rate && elapsed<=limit/c->rate) tokens=b->tokens+elapsed*c->rate;
     if(tokens>limit) tokens=limit;
     b->at=now;b->tokens=tokens;
-    if(tokens>=(__u64)c->repeat*FF_NS) {b->tokens-=(__u64)c->repeat*FF_NS;ok=1;}
+    if(tokens>=(__u64)repeat*FF_NS) {b->tokens-=(__u64)repeat*FF_NS;ok=1;}
     bpf_spin_unlock(&b->lock);
     if(!ok) stat(FF_RATE_LIMITED);
     return ok;
@@ -22,18 +22,24 @@ static __always_inline int reserve(struct ff_interface *iface,struct ff_config *
 /* BPF-to-BPF calls have five argument registers: pack the two byte fields. */
 static __noinline int emit(struct __sk_buff *skb,struct ff_interface *iface,struct ff_config *c,int reverse,__u32 ttl_protocol) {
     __u32 protocol=ttl_protocol&255,remote_ttl=ttl_protocol>>8;
-    __u64 now=bpf_ktime_get_ns();__u32 ttl=c->ttl,z=0;
-    if(c->estimate_hops && remote_ttl) {
+    __u32 is_udp=(protocol==17);
+    __u32 base_ttl=is_udp?(c->udp_ttl?c->udp_ttl:c->ttl):(c->tcp_ttl?c->tcp_ttl:c->ttl);
+    __u32 repeat=is_udp?(c->udp_repeat?c->udp_repeat:c->repeat):(c->tcp_repeat?c->tcp_repeat:c->repeat);
+    __u32 est=is_udp?(c->udp_ttl?c->udp_estimate_hops:c->estimate_hops):(c->tcp_ttl?c->tcp_estimate_hops:c->estimate_hops);
+    __u32 pct=is_udp?(c->udp_ttl?c->udp_percent:c->percent):(c->tcp_ttl?c->tcp_percent:c->percent);
+    __u32 min_hops=is_udp?c->udp_min_hops:c->tcp_min_hops;
+    __u64 now=bpf_ktime_get_ns();__u32 ttl=base_ttl,z=0;
+    if(est && remote_ttl) {
         __u32 initial=remote_ttl<=32?32:remote_ttl<=64?64:remote_ttl<=128?128:255;
         __u32 hops=initial-remote_ttl;
-        __u32 dynamic=hops*c->percent/100;
+        __u32 dynamic=hops*pct/100;
         if(dynamic>ttl) ttl=dynamic;
-        if(ttl>=hops) {stat(FF_SKIP_NEAR);return 0;}
+        if(ttl>=hops || (min_hops && hops<=min_hops)) {stat(FF_SKIP_NEAR);return 0;}
     } else if(!remote_ttl) stat(FF_TTL_UNKNOWN);
-    if(!reserve(iface,c,now)) return 0;
+    if(!reserve(iface,c,repeat,now)) return 0;
     __u64 *seq=bpf_map_lookup_elem(&sequence,&z);
     if(!seq) return 0;
-    __u32 count=protocol==17?c->udp_template_count:c->tcp_template_count;
+    __u32 count=is_udp?c->udp_template_count:c->tcp_template_count;
     if(!count || count>FF_TEMPLATE_MAX) {stat(FF_BUILD_FAILED);return 0;}
     struct ff_rotation *rotation=bpf_map_lookup_elem(&rotations,&c->generation);
     if(!rotation) {stat(FF_MAP_FAILED);return 0;}
@@ -41,7 +47,7 @@ static __noinline int emit(struct __sk_buff *skb,struct ff_interface *iface,stru
     /* One globally serialized selection per trigger, not per repeat or CPU.
      * No helpers inside the lock; indices wrap explicitly without overflow. */
     bpf_spin_lock(&rotation->lock);
-    if(protocol==17) {slot=rotation->udp;rotation->udp=slot+1>=count?0:slot+1;}
+    if(is_udp) {slot=rotation->udp;rotation->udp=slot+1>=count?0:slot+1;}
     else {slot=rotation->tcp;rotation->tcp=slot+1>=count?0:slot+1;}
     bpf_spin_unlock(&rotation->lock);
     if(slot>=count) {stat(FF_BUILD_FAILED);return 0;}
@@ -49,7 +55,7 @@ static __noinline int emit(struct __sk_buff *skb,struct ff_interface *iface,stru
     saved[0]=skb->cb[0];saved[1]=skb->cb[1];saved[2]=skb->cb[2];
     saved[3]=skb->cb[3];saved[4]=skb->cb[4];
     for(int i=0;i<8;i++) {
-        if(i>=c->repeat) break;
+        if((__u32)i>=repeat) break;
         if(!alive(bpf_ktime_get_ns()))break;
         stat(FF_ATTEMPT);
         __u64 id=__sync_fetch_and_add(seq,1)+1;
@@ -90,8 +96,9 @@ static __always_inline int observe(struct __sk_buff *skb,int in) {
     if(parse(skb,iface,in,&p)) {stat(FF_SKIP_LAYOUT);return TC_ACT_UNSPEC;}
     if(!remote_allowed(&p,c)) {stat(FF_SKIP_PRIVATE);return TC_ACT_UNSPEC;}
     __u32 remote_ttl=0;int trigger=0;
-    if(p.key.protocol==6 && c->tcp_enabled) trigger=tcp_trigger(skb,&p,c,in,now,&remote_ttl);
-    else if(p.key.protocol==17 && c->udp_enabled) trigger=udp_trigger(&p,c,in,now,&remote_ttl);
+    __u32 proto_mask=iface->proto_mask?iface->proto_mask:FF_PROTO_BOTH;
+    if(p.key.protocol==6 && c->tcp_enabled && (proto_mask&FF_PROTO_TCP)) trigger=tcp_trigger(skb,&p,c,in,now,&remote_ttl);
+    else if(p.key.protocol==17 && c->udp_enabled && (proto_mask&FF_PROTO_UDP)) trigger=udp_trigger(&p,c,in,now,&remote_ttl);
     if(trigger) emit(skb,iface,c,in,(remote_ttl<<8)|p.key.protocol);
     return TC_ACT_UNSPEC;
 }

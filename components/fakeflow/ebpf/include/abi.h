@@ -8,6 +8,9 @@
 #define FF_INTERFACES 8
 #define FF_NS 1000000000ULL
 #define FF_REQUEST_NS (1 * FF_NS)
+#define FF_PROTO_TCP  1U
+#define FF_PROTO_UDP  2U
+#define FF_PROTO_BOTH (FF_PROTO_TCP | FF_PROTO_UDP)
 enum ff_mode { FF_ETHERNET, FF_L3, FF_PPPOE };
 enum ff_stat {
     FF_TCP_SYN, FF_TCP_ELIGIBLE, FF_TFO_STRIPPED, FF_SKIP_SYNACK_DATA,
@@ -24,9 +27,11 @@ struct ff_config {
     __u32 udp_idle, ttl, repeat, estimate_hops;
     __u32 percent, rate, burst, allow_private;
     __u32 tcp_template_count, udp_template_count;
+    __u32 tcp_ttl, tcp_repeat, tcp_estimate_hops, tcp_percent, tcp_min_hops;
+    __u32 udp_ttl, udp_repeat, udp_estimate_hops, udp_percent, udp_min_hops;
 };
 struct ff_interface {
-    __u32 generation, slot, mode, mtu, builder;
+    __u32 generation, slot, mode, mtu, builder, proto_mask;
 };
 struct ff_template { __u32 len; __u8 data[FF_PAYLOAD_MAX]; };
 struct ff_template_key { __u32 generation, protocol, slot; };

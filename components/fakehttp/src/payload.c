@@ -260,9 +260,9 @@ int fh_payload_setup(void)
             current_node->next = node;
             node->next = next;
         } else {
-            current_node = node;
             node->next = node;
         }
+        current_node = node;
 
         switch (pinfo->type) {
             case FH_PAYLOAD_CUSTOM:
@@ -330,6 +330,7 @@ void fh_payload_cleanup(void)
         }
         node = next_node;
     }
+    current_node = NULL;
 }
 
 

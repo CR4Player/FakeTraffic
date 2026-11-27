@@ -1,4 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+if [ -r /usr/libexec/faketraffic/contract.sh ]; then
+    . /usr/libexec/faketraffic/contract.sh
+elif [ -n "${FT_CONTRACT_SH:-}" ] && [ -r "$FT_CONTRACT_SH" ]; then
+    . "$FT_CONTRACT_SH"
+fi
 prepare_runtime() {
     local metadata
     [ ! -L /var/run/faketraffic ] || return 1
@@ -38,7 +43,7 @@ wait_own_stopped() {
 }
 nfqueue_number_valid() {
     case "$1" in ''|*[!0-9]*) return 1;; esac
-    [ "$1" -ge "${2:-0}" ] 2>/dev/null && [ "$1" -le 65535 ] 2>/dev/null
+    [ "$1" -ge "${2:-${FT_SCHEMA_QUEUE_TCP_MIN:-0}}" ] 2>/dev/null && [ "$1" -le "${FT_SCHEMA_QUEUE_MAX:-65535}" ] 2>/dev/null
 }
 # Match native unsigned decimal/hex parsing without evaluating arbitrary UCI
 # text or interpreting decimal leading zeroes as shell octal.
@@ -63,28 +68,34 @@ nfqueue_uint() {
     printf '%s\n' "$value"
 }
 validate_nfqueue_packets() {
-    local protocol="$1" ttl repeat percent nohop inbound outbound ipv4 ipv6
+    local protocol="$1" ttl repeat percent nohop min_hops inbound outbound ipv4 ipv6
     if [ "$protocol" = tcp ]; then
         config_get ttl advanced ttl -1
         config_get repeat advanced repeat -1
         config_get percent advanced pct -1
+        config_get min_hops advanced min_hops -1
         config_get_bool nohop advanced disable_estimation 0
         # TCP's adapter omits these default/disabled sentinels.
-        case "$ttl" in ''|-1|0) ttl=3;; esac
-        case "$repeat" in ''|-1|0) repeat=2;; esac
-        case "$percent" in ''|-1|0) percent=0;; esac
-        case "$ttl:$repeat:$percent" in *[!0-9:]*) return 1;; esac
-        percent="$(nfqueue_uint "$percent" 0 99)" || return 1
+        case "$ttl" in ''|-1|0) ttl=${FT_SCHEMA_TTL_DEFAULT:-3};; esac
+        case "$repeat" in ''|-1|0) repeat=${FT_SCHEMA_NFQ_TCP_REPEAT_DEFAULT:-2};; esac
+        case "$percent" in ''|-1|0) percent=${FT_SCHEMA_DYNAMIC_PCT_DEFAULT:-0};; esac
+        case "$min_hops" in ''|-1|0) min_hops=${FT_SCHEMA_MIN_HOPS_DEFAULT:-0};; esac
+        case "$ttl:$repeat:$percent:$min_hops" in *[!0-9:]*) return 1;; esac
+        percent="$(nfqueue_uint "$percent" "${FT_SCHEMA_DYNAMIC_PCT_MIN:-0}" "${FT_SCHEMA_DYNAMIC_PCT_MAX:-99}")" || return 1
+        min_hops="$(nfqueue_uint "$min_hops" "${FT_SCHEMA_MIN_HOPS_MIN:-0}" "${FT_SCHEMA_MIN_HOPS_MAX:-254}")" || return 1
     else
         config_get ttl main ttl
         config_get repeat main repeat
         config_get percent main dynamic_pct
+        config_get min_hops main min_hops
         config_get_bool nohop main no_hop_estimate 0
-        ttl="${ttl:-3}" repeat="${repeat:-2}"
+        ttl="${ttl:-${FT_SCHEMA_TTL_DEFAULT:-3}}" repeat="${repeat:-${FT_SCHEMA_NFQ_TCP_REPEAT_DEFAULT:-2}}"
         # Only empty and literal 0 are omitted by append_nonzero_arg. Other
         # spellings that parse as zero would be passed to native -y and rejected.
         case "$percent" in ''|0) percent=0;;
-            *) percent="$(nfqueue_uint "$percent" 1 99)" || return 1;; esac
+            *) percent="$(nfqueue_uint "$percent" 1 "${FT_SCHEMA_DYNAMIC_PCT_MAX:-99}")" || return 1;; esac
+        case "$min_hops" in ''|0) min_hops=0;;
+            *) min_hops="$(nfqueue_uint "$min_hops" 1 "${FT_SCHEMA_MIN_HOPS_MAX:-254}")" || return 1;; esac
         config_get_bool inbound main inbound 0
         config_get_bool outbound main outbound 1
         config_get_bool ipv4 main ipv4 1
@@ -92,7 +103,8 @@ validate_nfqueue_packets() {
         [ "$inbound" = 1 ] || [ "$outbound" = 1 ] || return 1
         [ "$ipv4" = 1 ] || [ "$ipv6" = 1 ] || return 1
     fi
-    nfqueue_uint "$ttl" 1 255 >/dev/null && nfqueue_uint "$repeat" 1 10 >/dev/null || return 1
+    nfqueue_uint "$ttl" "${FT_SCHEMA_TTL_MIN:-1}" "${FT_SCHEMA_TTL_MAX:-255}" >/dev/null &&
+        nfqueue_uint "$repeat" "${FT_SCHEMA_NFQ_REPEAT_MIN:-1}" "${FT_SCHEMA_NFQ_REPEAT_MAX:-10}" >/dev/null || return 1
     [ "$nohop" != 1 ] || [ "$percent" = 0 ]
 }
 # Pure candidate validation, shared by start and reload. Disabled protocols do
@@ -102,11 +114,11 @@ validate_nfqueue() {
     local tcp_enabled udp_enabled tcp_queue udp_queue
     config_get_bool tcp_enabled globals enabled 0
     config_get_bool udp_enabled main enabled 0
-    config_get tcp_queue advanced queue_number 512
-    config_get udp_queue main queue_num 513
-    [ "$tcp_queue" != -1 ] || tcp_queue=512
-    if { [ "$tcp_enabled" = 1 ] && ! nfqueue_number_valid "$tcp_queue"; } ||
-       { [ "$udp_enabled" = 1 ] && ! nfqueue_number_valid "$udp_queue" 1; }; then
+    config_get tcp_queue advanced queue_number "${FT_SCHEMA_QUEUE_TCP_DEFAULT:-512}"
+    config_get udp_queue main queue_num "${FT_SCHEMA_QUEUE_UDP_DEFAULT:-513}"
+    [ "$tcp_queue" != -1 ] || tcp_queue=${FT_SCHEMA_QUEUE_TCP_DEFAULT:-512}
+    if { [ "$tcp_enabled" = 1 ] && ! nfqueue_number_valid "$tcp_queue" "${FT_SCHEMA_QUEUE_TCP_MIN:-0}"; } ||
+       { [ "$udp_enabled" = 1 ] && ! nfqueue_number_valid "$udp_queue" "${FT_SCHEMA_QUEUE_UDP_MIN:-1}"; }; then
         logger -t faketraffic 'Invalid NFQUEUE number; active service preserved'
         return 1
     fi

@@ -54,8 +54,10 @@ map shape 不符在載入前拒絕，沒有自動轉換舊 BPF object。
 
 輪替是全介面／CPU 共用、每協定獨立的 spinlock cursor；不是各 CPU 自行輪替。
 模板 map 預配置上限為 16 世代 × 2 協定 × 16 slots，會增加記憶體配置；
-未宣稱較省 RAM、吞吐提升或無鎖擴充性。NFQUEUE 的內部反向鏈結插入順序，及
-HTTP/TLS/SIP 產生 bytes，未承諾與此後端完全相同，仍需明確接受 native 語義差異。
+未宣稱較省 RAM、吞吐提升或無鎖擴充性。eBPF v2 支援每個 `[[interfaces]]` 透過
+`protocols = ["tcp", "udp"]` 指定協議掩碼，並支援 `[tcp]`／`[udp]` 各自的 `ttl`、
+`repeat`、`estimate_hops`、`dynamic_percent` 與 `min_hops`（未指定時繼承 `[injection]`）。
+HTTP/TLS/SIP 產生 bytes 未承諾與 NFQUEUE 後端完全相同，仍需明確接受 native 語義差異。
 
 驗證方式：`make test-ebpf-config`、`make test-template-publication BPF_INCLUDE=<既有標頭目錄>`、
 `sh tests/preflight.sh`、`node --test tests/*.test.mjs`。
