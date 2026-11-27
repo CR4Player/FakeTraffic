@@ -68,28 +68,34 @@ nfqueue_uint() {
     printf '%s\n' "$value"
 }
 validate_nfqueue_packets() {
-    local protocol="$1" ttl repeat percent nohop inbound outbound ipv4 ipv6
+    local protocol="$1" ttl repeat percent nohop min_hops inbound outbound ipv4 ipv6
     if [ "$protocol" = tcp ]; then
         config_get ttl advanced ttl -1
         config_get repeat advanced repeat -1
         config_get percent advanced pct -1
+        config_get min_hops advanced min_hops -1
         config_get_bool nohop advanced disable_estimation 0
         # TCP's adapter omits these default/disabled sentinels.
         case "$ttl" in ''|-1|0) ttl=${FT_SCHEMA_TTL_DEFAULT:-3};; esac
         case "$repeat" in ''|-1|0) repeat=${FT_SCHEMA_NFQ_TCP_REPEAT_DEFAULT:-2};; esac
         case "$percent" in ''|-1|0) percent=${FT_SCHEMA_DYNAMIC_PCT_DEFAULT:-0};; esac
-        case "$ttl:$repeat:$percent" in *[!0-9:]*) return 1;; esac
+        case "$min_hops" in ''|-1|0) min_hops=${FT_SCHEMA_MIN_HOPS_DEFAULT:-0};; esac
+        case "$ttl:$repeat:$percent:$min_hops" in *[!0-9:]*) return 1;; esac
         percent="$(nfqueue_uint "$percent" "${FT_SCHEMA_DYNAMIC_PCT_MIN:-0}" "${FT_SCHEMA_DYNAMIC_PCT_MAX:-99}")" || return 1
+        min_hops="$(nfqueue_uint "$min_hops" "${FT_SCHEMA_MIN_HOPS_MIN:-0}" "${FT_SCHEMA_MIN_HOPS_MAX:-254}")" || return 1
     else
         config_get ttl main ttl
         config_get repeat main repeat
         config_get percent main dynamic_pct
+        config_get min_hops main min_hops
         config_get_bool nohop main no_hop_estimate 0
         ttl="${ttl:-${FT_SCHEMA_TTL_DEFAULT:-3}}" repeat="${repeat:-${FT_SCHEMA_NFQ_TCP_REPEAT_DEFAULT:-2}}"
         # Only empty and literal 0 are omitted by append_nonzero_arg. Other
         # spellings that parse as zero would be passed to native -y and rejected.
         case "$percent" in ''|0) percent=0;;
             *) percent="$(nfqueue_uint "$percent" 1 "${FT_SCHEMA_DYNAMIC_PCT_MAX:-99}")" || return 1;; esac
+        case "$min_hops" in ''|0) min_hops=0;;
+            *) min_hops="$(nfqueue_uint "$min_hops" 1 "${FT_SCHEMA_MIN_HOPS_MAX:-254}")" || return 1;; esac
         config_get_bool inbound main inbound 0
         config_get_bool outbound main outbound 1
         config_get_bool ipv4 main ipv4 1

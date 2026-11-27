@@ -35,6 +35,7 @@ test('invalid numeric NFQUEUE candidates preserve the running owner', { skip: pr
     ['advanced.ttl', '256'], ['main.ttl', '0'], ['main.ttl', '256'],
     ['advanced.repeat', '11'], ['main.repeat', '11'],
     ['advanced.pct', '100'], ['main.dynamic_pct', '100'], ['main.dynamic_pct', '00'],
+    ['advanced.min_hops', '255'], ['main.min_hops', '255'], ['main.min_hops', '00'],
     ['main.ttl', '0x100'], ['main.repeat', '0x100000001'],
     ['main.ttl', '18446744073709551619'], ['main.ttl', '1+2'], ['main.ttl', '-3']
   ]) {
